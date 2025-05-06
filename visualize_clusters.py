@@ -6,6 +6,8 @@ import pickle as pkl
 from sklearn.model_selection import train_test_split
 from collections import Counter
 from matplotlib import pyplot as plt
+from pathlib import Path
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np; np.random.seed(1)
@@ -14,10 +16,18 @@ from sklearn.manifold import TSNE
 from nltk import sent_tokenize
 import sys
 import matplotlib.cm as cm
+import hashlib
+import pickle
 
 import IPython.display as display
 from IPython.display import display, Javascript, HTML
 
+from openai import OpenAI
+import os
+from dotenv import load_dotenv  
+
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Helper functions
 def update_annot(annot, sc, ind, names):
@@ -92,6 +102,38 @@ def load_interp_space(interp_folder_path, style_feat_clm, top_k, only_llm_feats,
         'author_labels' : author_labels
     }
 
+def compute_tsne_with_cache(embeddings: np.ndarray, cache_path: str = 'datasets/tsne_cache.pkl') -> np.ndarray:
+    """
+    Compute t-SNE with caching to avoid recomputation for the same input.
+
+    Args:
+        embeddings (np.ndarray): The input embeddings to compute t-SNE on.
+        cache_path (str): Path to the cache file.
+
+    Returns:
+        np.ndarray: The t-SNE transformed embeddings.
+    """
+    # Create a hash of the input embeddings to use as a key
+    hash_key = hashlib.md5(embeddings.tobytes()).hexdigest()
+    
+    if os.path.exists(cache_path):
+        with open(cache_path, 'rb') as f:
+            cache = pickle.load(f)
+    else:
+        cache = {}
+
+    if hash_key in cache:
+        return cache[hash_key]
+    else:
+        print("Computing t-SNE")
+        tsne_result = TSNE(n_components=2, learning_rate='auto',
+                           init='random', perplexity=3).fit_transform(embeddings)
+        cache[hash_key] = tsne_result
+        with open(cache_path, 'wb') as f:
+            pickle.dump(cache, f)
+        return tsne_result
+
+
 class ExplainabilityDemo():
 
     def __init__(self):
@@ -106,6 +148,43 @@ class ExplainabilityDemo():
         self.instances_to_explain = json.load(open(instances_to_explain_path))
         self.interp_space = load_interp_space(interp_space_path, self.style_feat_clm, self.top_k, self.only_llm_feats, self.only_gram2vec_feats)
 
+    
+    def generate_feature_spans(self, text: str, features: list[str]) -> str:
+        '''Generate feature spans using OpenAI API.
+        Args:
+            text (str): The input text to analyze.
+            features (list): List of features to identify in the text.
+        Returns:
+            str: JSON-formatted string mapping features to example spans.    
+        ''' 
+        # Create Prompt for OpenAI API
+        prompt = f"""You are a stylistic annotation assistant. Given a writing sample and a list of descriptive features, identify the exact text spans that demonstrate each feature.
+        
+        Important:
+        - The headers like "Document 1:", "Document 2:" are **not part of the original text** and are only added for formatting — you should **ignore them completely** when selecting spans.
+        - For each feature, even if there is no clear match, still include the feature in the output with an empty list.
+        - Only return spans that are clear examples, using exact phrases from the text.
+
+        Respond in JSON format like:
+        {{
+        "feature sentence 1": ["example span 1", "example span 2"],
+        ...
+        }}
+
+        Text:
+        \"\"\"{text}\"\"\"
+
+        Style Features:
+        {features}
+        """
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        return response.choices[0].message.content
+
+    
     def visualize_clusters(self, instance_id, out):
 
         # print('\n', 'Model Prediction:',  self.instances_to_explain[instance_id]['latent_rank'], '\n',
@@ -139,8 +218,11 @@ class ExplainabilityDemo():
     
         all_embeddings = np.concatenate((query_author_latent, candid_author_latents, background_author_embedding, centroid_embeddings))
     
-        all_proj_embeddings = TSNE(n_components=2, learning_rate='auto',
-                          init='random', perplexity=3).fit_transform(all_embeddings)
+        # all_proj_embeddings = TSNE(n_components=2, learning_rate='auto',
+        #                   init='random', perplexity=3).fit_transform(all_embeddings)
+        all_proj_embeddings = compute_tsne_with_cache(all_embeddings)
+        # Now we can load tsne transformed embeddings from a file to make it faster.
+        # the tsne transformation will only be computed for new instances.
     
         
         query_author_proj   = all_proj_embeddings[0]
@@ -150,6 +232,7 @@ class ExplainabilityDemo():
     
     
         annotation_names = np.array(["\n".join(["{}. {}".format(i, f) for i, f in enumerate(dimension_to_style[item[0]])]) for item in dimension_to_latent.items()])
+        # print('------------ annotation_names ------------', annotation_names)
         #names = np.array(['\n'.join(sent_tokenize(dimension_to_style[item[0]])) for item in dimension_to_latent.items()])
     
     
@@ -169,6 +252,41 @@ class ExplainabilityDemo():
     
     
         plt.show()
+        # After plotting:
+        self.show_gpt_style_span_annotations(instance_id)
+    
+    def show_gpt_style_span_annotations(self, instance_id: int) -> None:
+        """
+        Display GPT-annotated stylistic feature spans for the highest-ranked cluster.
+
+        Args:
+            instance_id (int): Index of the instance to explain.
+        """
+        item = self.instances_to_explain[instance_id]
+        text = item["Q_fullText"]
+        rep_clusters = item['rep_clusters']
+        latent_rank = item['latent_rank']
+
+        # Find the index of the author with rank 0 (i.e., the predicted one)
+        predicted_author_idx = latent_rank.index(0)
+
+        # Use the corresponding cluster
+        cluster_id = rep_clusters[predicted_author_idx]
+
+        # Get top-k descriptive features for the selected cluster
+        features = self.interp_space['dimension_to_style'].get(cluster_id)
+        print(len(features), 'features')
+
+        if not features:
+            print(f"No features found for cluster {cluster_id}")
+            return
+
+        print(f"\n=== GPT Annotations for Cluster {cluster_id} ===")
+        print(f"Text: {text[:300]}...")  # Preview
+
+        annotated = self.generate_feature_spans(text, features)
+        print("Annotations:\n", annotated)
+
     
     def visualize_points(self, fig, ax, points, points_labels, labels, output, add_annotation=False, names_dict=None):
         colors = iter(cm.rainbow(np.linspace(0, 1, len(labels))))
@@ -236,3 +354,65 @@ class ExplainabilityDemo():
         #                     arrowprops=dict(arrowstyle="->"))
         # annot.set_visible(False)
         # fig.canvas.mpl_connect("motion_notify_event", lambda x: hover(fig, sc, ax, annot, annotation_names_dict, x))
+
+    def process_all_instances(self, output_dir: str = "output_data") -> None:
+        """
+        Process a subset of instances to:
+        - Generate and save t-SNE visualizations
+        - Generate GPT-based feature span annotations
+        - Save annotation results and metadata
+
+        Args:
+            output_dir (str): Directory to store outputs (figures, JSONs, logs).
+        """
+        os.makedirs(output_dir, exist_ok=True)
+
+        results = []
+
+        # ctr = 0
+
+        for instance_id in range(len(self.instances_to_explain)):
+            print(f"Processing instance {instance_id}...")
+
+            # 1. Generate and save TSNE figure
+            fig_path = os.path.join(output_dir, f"cluster_vis/tsne_{instance_id}.png")
+            self.visualize_clusters(instance_id, out=None)
+            plt.savefig(fig_path)
+            plt.close()
+
+            # 2. Generate feature→span map
+            cluster_ids = self.instances_to_explain[instance_id]['rep_clusters']
+            all_span_mappings = {}
+            for cluster_id in cluster_ids:
+                features = self.interp_space['dimension_to_style'][cluster_id]
+                text = self.instances_to_explain[instance_id]['Q_fullText']
+                try:
+                    spans_json = self.generate_feature_spans(text, features)
+                    span_map = json.loads(spans_json)
+                except Exception as e:
+                    print(f" Failed to annotate instance {instance_id}, cluster {cluster_id}: {e}")
+                    span_map = {}
+
+                all_span_mappings[cluster_id] = span_map
+
+            # 3. Save span mappings to JSON
+            span_map_path = os.path.join(output_dir, f"spans/spans_{instance_id}.json")
+            with open(span_map_path, "w") as f:
+                json.dump(all_span_mappings, f, indent=2)
+
+            # 4. Add metadata to result log
+            results.append({
+                "instance_id": instance_id,
+                "tsne_path": fig_path,
+                "span_map_path": span_map_path,
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # ctr += 1
+            # if ctr == 10:  # Testing for 1st 10 instances.
+            #     break
+
+        # 5. Save log to CSV
+        df = pd.DataFrame(results)
+        df.to_csv(os.path.join(output_dir, "tsne_annotation_log.csv"), index=False)
+        print(" All results saved.")
