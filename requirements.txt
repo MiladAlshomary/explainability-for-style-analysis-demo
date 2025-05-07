@@ -1,0 +1,7 @@
+nltk
+scikit-learn
+ipympl
+ipywidgets
+matplotlib
+openai
+python-dotenv
