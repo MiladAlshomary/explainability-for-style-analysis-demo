@@ -17,7 +17,33 @@ import matplotlib.cm as cm
 
 import IPython.display as display
 from IPython.display import display, Javascript, HTML
+import ipywidgets as widgets
 
+def create_style_features_box(feats, widgets, output):
+    # Create a checkbox for each item
+    checkboxes = [widgets.Checkbox(value=False, description=item) for item in feats]
+    
+    # Create a function to read selected values
+    def annotate_selected_features(_):
+        selected = [cb.description for cb in checkboxes if cb.value]
+        msg = "You selected: " + ", ".join(selected) if selected else "Nothing selected."
+        
+        # Trigger JavaScript alert
+        with output:
+            output.clear_output()
+            display(HTML(f"""
+                <script type="text/javascript">
+                    alert("{msg}");
+                </script>
+            """))
+        
+    # Button to trigger reading the selected checkboxes
+    submit_button = widgets.Button(description='annotate features in texts')
+    submit_button.on_click(annotate_selected_features)
+    
+    # Display checkboxes and the button
+    box = widgets.VBox(checkboxes + [submit_button])
+    display(box)
 
 # Helper functions
 def update_annot(annot, sc, ind, names):
