@@ -21,6 +21,7 @@ import pickle
 
 import IPython.display as display
 from IPython.display import display, Javascript, HTML
+import ipywidgets as widgets
 
 from openai import OpenAI
 import os
@@ -148,7 +149,36 @@ class ExplainabilityDemo():
         self.instances_to_explain = json.load(open(instances_to_explain_path))
         self.interp_space = load_interp_space(interp_space_path, self.style_feat_clm, self.top_k, self.only_llm_feats, self.only_gram2vec_feats)
 
-    
+
+    def create_style_features_box(self, feats, widgets, output):
+        # Create a checkbox for each item
+        checkboxes = [widgets.Checkbox(value=False, description=item, layout=widgets.Layout(width='auto')) for item in feats]
+        
+        # Create a function to read selected values
+        def annotate_selected_features(_):
+            selected = [cb.description for cb in checkboxes if cb.value]
+            msg = "You selected: " + ", ".join(selected) if selected else "Nothing selected."
+
+            print(msg)
+            # Trigger JavaScript alert
+            with output:
+                output.clear_output()
+                display(HTML(f"""
+                    <script type="text/javascript">
+                        alert("{msg}");
+                    </script>
+                """))
+            
+        # Button to trigger reading the selected checkboxes
+        submit_button = widgets.Button(description='annotate features in texts', layout=widgets.Layout(width='auto'))
+        submit_button.on_click(annotate_selected_features)
+        
+        # Display checkboxes and the button
+        box = widgets.VBox(checkboxes + [submit_button], layout=widgets.Layout(width='auto'))
+        box.layout.display = 'flex'  # Hide initially
+
+        return box
+
     def generate_feature_spans(self, text: str, features: list[str]) -> str:
         '''Generate feature spans using OpenAI API.
         Args:
@@ -185,7 +215,7 @@ class ExplainabilityDemo():
         return response.choices[0].message.content
 
     
-    def visualize_clusters(self, instance_id, out):
+    def visualize_clusters(self, instance_id, out, widgets):
 
         # print('\n', 'Model Prediction:',  self.instances_to_explain[instance_id]['latent_rank'], '\n',
         #       'Interp Prediction:', self.instances_to_explain[instance_id]['interp_rank'], '\n',
@@ -250,10 +280,14 @@ class ExplainabilityDemo():
         # Visualize the query and candidate authors
         self.visualize_query_and_candidate_authors(fig, ax, query_author_proj, candid_authors_proj, predicted_author_idx)
     
-    
         plt.show()
         # After plotting:
-        self.show_gpt_style_span_annotations(instance_id)
+        #self.show_gpt_style_span_annotations(instance_id)
+        # select one cluster from the interp space for now
+        top_feats = self.interp_space['dimension_to_style'][1]
+        self.vbox = self.create_style_features_box(top_feats, widgets, out)
+        display(self.vbox)
+        display(HTML(self.instances_to_explain[instance_id]['authors_texts_as_html']))
     
     def show_gpt_style_span_annotations(self, instance_id: int) -> None:
         """
