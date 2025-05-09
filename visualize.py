@@ -275,13 +275,13 @@ def generate_feature_spans(client, text: str, features: list[str]) -> str:
     )
     return response.choices[0].message.content
 
-def generate_feature_spans_cached(client, instance_id: str, text: str, features: list[str]) -> dict:
+def generate_feature_spans_cached(client, instance_id: str, text: str, features: list[str], role: str = "mystery" ) -> dict:
     """
     Computes a cache key from instance_id + text + feature list,
     then either loads or calls the API and saves to disk.
     Returns the parsed JSON dict mapping feature->list[spans].
     """
-    cache_path = os.path.join(CACHE_DIR, f"{instance_id}.json")
+    cache_path = os.path.join(CACHE_DIR, f"{instance_id}_{role}.json")
     if os.path.exists(cache_path):
         return json.load(open(cache_path))
     else:
@@ -290,6 +290,64 @@ def generate_feature_spans_cached(client, instance_id: str, text: str, features:
         with open(cache_path, "w") as f:
             json.dump(mapping, f, indent=2)
         return mapping
+
+def highlight_spans(text: str, selected_feature: str, spans_map: dict) -> str:
+    spans = spans_map.get(selected_feature, [])
+    if not spans:
+        return None  # or an empty string flagging “not present”
+    for span in spans:
+        text = text.replace(span, f"<mark>{span}</mark>")
+    return text
+
+def show_both_spans(client, iid, selected_feature, features_list, instances, cfg):
+    iid = int(iid)
+    inst = instances[iid]
+    mystery_text = inst['Q_fullText']
+    # candidate text of the predicted author
+    pred_idx     = inst['latent_rank'][0]
+    candidate_text = inst[f'a{pred_idx}_fullText']
+
+    # generate (or load) spans mapping for both texts
+    all_feats = features_list#(iid, cfg, instances)
+    mystery_map   = generate_feature_spans_cached(client, str(iid), mystery_text, all_feats, role="mystery")
+    candidate_map = generate_feature_spans_cached(client, f"{iid}_cand{pred_idx}", candidate_text, all_feats, role="candidate")
+
+    # highlight
+    myst = highlight_spans(mystery_text, selected_feature, mystery_map)
+    cand = highlight_spans(candidate_text, selected_feature, candidate_map)
+
+    # build HTML, handling “not present” cases
+    html_parts = []
+    html_parts.append("<h3>Mystery Author</h3>")
+    if myst is None:
+        # html_parts.append(f"<p><em>Feature “{selected_feature}” not found.</em></p>")
+        html_parts.append(f"""
+        <div style="padding:10px; margin-top:10px;">
+          <strong style="color:red;">
+            Feature “{selected_feature}” not present.
+          </strong>
+        </div>
+        """)
+        html_parts.append(f"<p>{mystery_text}</p>")
+    else:
+        html_parts.append(f"<p>{myst}</p>")
+
+    html_parts.append(f"<hr><h3>Predicted Candidate - C{pred_idx+1} </h3>")
+    if cand is None:
+        # html_parts.append(f"<p><em>Feature “{selected_feature}” not found.</em></p>")
+        html_parts.append(f"""
+        <div style="padding:10px; margin-top:10px;">
+          <strong style="color:red;">
+            Feature “{selected_feature}” not present.
+          </strong>
+        </div>
+        """)
+        html_parts.append(f"<p>{candidate_text}</p>")
+    else:
+        html_parts.append(f"<p>{cand}</p>")
+
+    return "<div style='padding:10px;border:1px solid #ccc;'>" + "\n".join(html_parts) + "</div>"
+
 
 def show_spans(client, iid, selected_feature, features_list, instances, cfg):
     """
