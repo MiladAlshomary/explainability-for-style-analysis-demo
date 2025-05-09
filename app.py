@@ -1,14 +1,14 @@
 import gradio as gr
 import json
 
-from visualize import *
+from utils.visualizations import *
 
 import yaml
 
 from dotenv import load_dotenv  
 from openai import OpenAI
 
-def load_config(path="config.yaml"):
+def load_config(path="config/config.yaml"):
     with open(path, "r") as f:
         return yaml.safe_load(f)
     
@@ -61,7 +61,7 @@ def app(share=False):
         show_btn       = gr.Button("Show Feature Spans")
         highlighted_out = gr.HTML()
 
-        show_btn.click(fn=lambda iid, sel_feat, all_feats: show_spans(client, iid, sel_feat, all_feats, instances, cfg),
+        show_btn.click(fn=lambda iid, sel_feat, all_feats: show_both_spans(client, iid, sel_feat, all_feats, instances, cfg),
                        inputs=[dropdown, features_rb, feature_list_state],
                        outputs=[highlighted_out])
 
