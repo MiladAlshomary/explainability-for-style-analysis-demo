@@ -280,8 +280,7 @@ def generate_feature_spans_cached(client, instance_id: str, text: str, features:
     then either loads or calls the API and saves to disk.
     Returns the parsed JSON dict mapping feature->list[spans].
     """
-    key = hashlib.md5((instance_id + text + "|".join(features)).encode()).hexdigest()
-    cache_path = os.path.join(CACHE_DIR, f"{key}.json")
+    cache_path = os.path.join(CACHE_DIR, f"{instance_id}.json")
     if os.path.exists(cache_path):
         return json.load(open(cache_path))
     else:
