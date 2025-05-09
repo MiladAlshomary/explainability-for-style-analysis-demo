@@ -5,3 +5,6 @@ ipywidgets
 matplotlib
 openai
 python-dotenv
+gradio
+pyyaml
+plotly
