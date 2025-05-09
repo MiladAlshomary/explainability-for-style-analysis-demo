@@ -141,7 +141,7 @@ def load_interp_space(cfg):
     }
 
 def visualize_clusters_plotly(iid, cfg, instances):
-    # 1) compute all projections exactly as before
+    print("Generating cluster visualization")
 
     iid = int(iid)
     interp      = load_interp_space(cfg)
@@ -244,6 +244,7 @@ def visualize_clusters_plotly(iid, cfg, instances):
     return fig, update(choices=feature_list, value=feature_list[0]),feature_list
 
 def generate_feature_spans(client, text: str, features: list[str]) -> str:
+    print("Calling OpenAI to extract spans")
     """
     Call to OpenAI to extract spans. Returns a JSON string.
     """
@@ -304,15 +305,28 @@ def show_spans(client, iid, selected_feature, features_list, instances, cfg):
     spans_map = generate_feature_spans_cached(client, str(iid), text, all_feats)
     spans = spans_map.get(selected_feature, [])
 
-    # naive highlight: wrap each span in <mark>
-    highlighted = text
-    for span in spans:
-        highlighted = highlighted.replace(span, f"<mark>{span}</mark>")
+    # Build the base text (with highlights if any)
+    displayed_text = text
+    if spans:
+        for span in spans:
+            displayed_text = displayed_text.replace(span, f"<mark>{span}</mark>")
 
-    return f"""
+    # Wrap the text in a container
+    text_html = f"""
     <div style="border:1px solid #ccc; padding:10px; margin-top:10px;">
-      <h3>Highlighted Mystery Author Text</h3>
-      <p>{highlighted}</p>
+      <h3>Mystery Author Text</h3>
+      <p>{displayed_text}</p>
     </div>
-    """  
+    """
+
+    # If no spans, show a warning message above
+    if not spans:
+        msg_html = f"""
+        <div style="border:1px solid #f00; padding:10px; margin-top:10px; background:#fee;">
+          <strong>Feature “{selected_feature}” not present.</strong>
+        </div>
+        """
+        return msg_html + text_html
+    
+    return text_html
 
