@@ -46,8 +46,61 @@ def app(share=False):
 
         # ── Visualization for clusters ─────────────────────────────
         run_btn   = gr.Button("Run Visualization")
-        # with gr.Row():
-        plot_out   = gr.Plot()
+        # trying to override default plotly legend click behavior
+        # by adding a custom click handler to the legend items
+        # Doesn't work yet, but the idea is to add a click handler
+        gr.HTML("""
+        <script>
+        function handleLegendClick() {
+            const plotDiv = document.querySelector('[data-cy="cluster-plot"]');
+            const observer = new MutationObserver((mutations) => {
+                const graphDiv = plotDiv?.querySelector('.plotly-graph-div');
+                if (graphDiv) {
+                    graphDiv.on('plotly_legendclick', function(eventData) {
+                        const trace = eventData.fullData[eventData.curveNumber];
+                        const x = trace.x;
+                        const y = trace.y;
+                        
+                        // Handle single-point traces (candidates/query)
+                        let xRange, yRange;
+                        if (x.length === 1 && y.length === 1) {
+                            xRange = [x[0]-0.5, x[0]+0.5];
+                            yRange = [y[0]-0.5, y[0]+0.5];
+                        } else {
+                            // Multi-point traces (centroids/background)
+                            const xMin = Math.min(...x);
+                            const xMax = Math.max(...x);
+                            const yMin = Math.min(...y);
+                            const yMax = Math.max(...y);
+                            const xPadding = (xMax - xMin) * 0.1;
+                            const yPadding = (yMax - yMin) * 0.1;
+                            xRange = [xMin - xPadding, xMax + xPadding];
+                            yRange = [yMin - yPadding, yMax + yPadding];
+                        }
+                        
+                        Plotly.relayout(graphDiv, {
+                            'xaxis.range': xRange,
+                            'yaxis.range': yRange
+                        });
+                        
+                        return false; // Prevent default hide/show behavior
+                    });
+                    observer.disconnect();
+                }
+            });
+            observer.observe(plotDiv, { childList: true, subtree: true });
+        }
+        
+        // Initial setup
+        document.addEventListener("DOMContentLoaded", handleLegendClick);
+        // Reconnect when plot updates
+        document.addEventListener("DOMNodeInserted", handleLegendClick);
+        </script>
+        """)
+        plot_out   = gr.Plot(
+            label="Cluster Visualization",
+            elem_id="cluster-plot"
+        )
         features_rb = gr.Radio(choices=[], label="Closest Cluster Features")
         feature_list_state = gr.State() # placeholder for your extra output, invisible on the UI
 

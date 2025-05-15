@@ -51,7 +51,7 @@ def load_instance(instance_id, instances_to_explain: dict):
     mystery_html = f"""
     <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
       <h3>Mystery Author</h3>
-      <p>{data['Q_fullText']}</p>
+      <p>{data['Q_fullText'].replace('<','&lt;').replace('>','&gt;')}</p>
     </div>
     """
 
@@ -66,7 +66,7 @@ def load_instance(instance_id, instances_to_explain: dict):
         candidate_htmls.append(f"""
         <div style="border:1px solid #ccc; padding:10px; {extra_style}">
           <h4>{title}</h4>
-          <p>{text}</p>
+          <p>{text.replace('<','&lt;').replace('>','&gt;')}</p>
         </div>
         """)
 
@@ -188,21 +188,28 @@ def visualize_clusters_plotly(iid, cfg, instances):
     # map each cluster label to its color
     color_map = { label: cent_colors[i] for i, label in enumerate(cent_lbl) }
 
-    # background author colors pulled from their cluster label
-    bg_colors = [ color_map[label] for label in bg_lbls ]
+    # uncomment the following line to show background authors
+    ## background author colors pulled from their cluster label
+    # bg_colors = [ color_map[label] for label in bg_lbls ]
 
     # 2) build Plotly figure
     fig = go.Figure()
-    #use layout=go.Layout(width=900, height=450) to change size.
+    
+    fig.update_layout(
+        template='plotly_white',
+        margin=dict(l=40,r=40,t=60,b=40),
+        autosize=True,
+        hovermode='closest')
 
-    # background authors (light grey dots)
-    fig.add_trace(go.Scattergl(
-        x=bg_proj[:,0], y=bg_proj[:,1],
-        mode='markers',
-        marker=dict(size=6, color=bg_colors),
-        name='Background authors',
-        hoverinfo='skip'
-    ))
+    # uncomment the following line to show background authors
+    ## background authors (light grey dots)
+    # fig.add_trace(go.Scattergl(
+    #     x=bg_proj[:,0], y=bg_proj[:,1],
+    #     mode='markers',
+    #     marker=dict(size=6, color=bg_colors),
+    #     name='Background authors',
+    #     hoverinfo='skip'
+    # ))
 
     # centroids (rainbow colors + hovertext of your top-k features)
     hover_texts = [
@@ -212,19 +219,10 @@ def visualize_clusters_plotly(iid, cfg, instances):
     fig.add_trace(go.Scattergl(
         x=cent_proj[:,0], y=cent_proj[:,1],
         mode='markers',
-        marker=dict(symbol='triangle-up', size=10, color=cent_colors),
+        marker=dict(symbol='triangle-up', size=10, color="#d3d3d3"),#color=cent_colors
         name='Cluster centroids',
         hovertext=hover_texts,
         hoverinfo='text'
-    ))
-
-    # query author
-    fig.add_trace(go.Scattergl(
-        x=[q_proj[0]], y=[q_proj[1]],
-        mode='markers',
-        marker=dict(symbol='star', size=14, color='black'),
-        name='Mystery author',
-        hoverinfo='skip'
     ))
 
     # three candidates
@@ -238,6 +236,15 @@ def visualize_clusters_plotly(iid, cfg, instances):
             name=label,
             hoverinfo='skip'
         ))
+
+    # query author
+    fig.add_trace(go.Scattergl(
+        x=[q_proj[0]], y=[q_proj[1]],
+        mode='markers',
+        marker=dict(symbol='star', size=14, color='red'),
+        name='Mystery author',
+        hoverinfo='skip'
+    ))
 
     # layout tweaks
     fig.update_layout(
@@ -303,7 +310,7 @@ def highlight_spans(text: str, selected_feature: str, spans_map: dict) -> str:
     if not spans:
         return None  # or an empty string flagging “not present”
     for span in spans:
-        text = text.replace(span, f"<mark>{span}</mark>")
+        text = text.replace(span, f"<mark>{span.replace('<','&lt;').replace('>','&gt;')}</mark>")
     return text
 
 def show_both_spans(client, iid, selected_feature, features_list, instances, cfg):
@@ -314,14 +321,25 @@ def show_both_spans(client, iid, selected_feature, features_list, instances, cfg
     pred_idx     = inst['latent_rank'][0]
     candidate_text = inst[f'a{pred_idx}_fullText']
 
+    # candidate text of the other two authors
+    idx_1     = inst['latent_rank'][1]
+    candidate_idx_1_text = inst[f'a{idx_1}_fullText']
+    idx_2     = inst['latent_rank'][2]
+    candidate_idx_2_text = inst[f'a{idx_2}_fullText']
+
     # generate (or load) spans mapping for both texts
     all_feats = features_list#(iid, cfg, instances)
+    #TODO: add abutton to dynaically get features from different clusters not just predicted clusters
     mystery_map   = generate_feature_spans_cached(client, str(iid), mystery_text, all_feats, role="mystery")
     candidate_map = generate_feature_spans_cached(client, f"{iid}_cand{pred_idx}", candidate_text, all_feats, role="candidate")
+    candidate_map_1 = generate_feature_spans_cached(client, f"{iid}_cand{idx_1}", candidate_idx_1_text, all_feats, role="candidate")
+    candidate_map_2 = generate_feature_spans_cached(client, f"{iid}_cand{idx_2}", candidate_idx_2_text, all_feats, role="candidate")
 
     # highlight
     myst = highlight_spans(mystery_text, selected_feature, mystery_map)
     cand = highlight_spans(candidate_text, selected_feature, candidate_map)
+    cand_1 = highlight_spans(candidate_idx_1_text, selected_feature, candidate_map_1)
+    cand_2 = highlight_spans(candidate_idx_2_text, selected_feature, candidate_map_2)
 
     # build HTML, handling “not present” cases
     html_parts = []
@@ -335,7 +353,7 @@ def show_both_spans(client, iid, selected_feature, features_list, instances, cfg
           </strong>
         </div>
         """)
-        html_parts.append(f"<p>{mystery_text}</p>")
+        html_parts.append(f"<p>{mystery_text.replace('<','&lt;').replace('>','&gt;')}</p>")
     else:
         html_parts.append(f"<p>{myst}</p>")
 
@@ -349,10 +367,37 @@ def show_both_spans(client, iid, selected_feature, features_list, instances, cfg
           </strong>
         </div>
         """)
-        html_parts.append(f"<p>{candidate_text}</p>")
+        html_parts.append(f"<p>{candidate_text.replace('<','&lt;').replace('>','&gt;')}</p>")
     else:
         html_parts.append(f"<p>{cand}</p>")
 
+    html_parts.append(f"<hr><h3> Candidate - C{idx_1+1} </h3>")
+    if cand_1 is None:
+        # html_parts.append(f"<p><em>Feature “{selected_feature}” not found.</em></p>")
+        html_parts.append(f"""
+        <div style="padding:10px; margin-top:10px;">
+          <strong style="color:red;">
+            Feature “{selected_feature}” not present.
+          </strong>
+        </div>
+        """)
+        html_parts.append(f"<p>{candidate_idx_1_text.replace('<','&lt;').replace('>','&gt;')}</p>")
+    else:
+        html_parts.append(f"<p>{cand_1}</p>")
+
+    html_parts.append(f"<hr><h3> Candidate - C{idx_2+1} </h3>")
+    if cand_2 is None:
+        # html_parts.append(f"<p><em>Feature “{selected_feature}” not found.</em></p>")
+        html_parts.append(f"""
+        <div style="padding:10px; margin-top:10px;">
+          <strong style="color:red;">
+            Feature “{selected_feature}” not present.
+          </strong>
+        </div>
+        """)
+        html_parts.append(f"<p>{candidate_idx_2_text.replace('<','&lt;').replace('>','&gt;')}</p>")
+    else:
+        html_parts.append(f"<p>{cand_2}</p>")
     return "<div style='padding:10px;border:1px solid #ccc;'>" + "\n".join(html_parts) + "</div>"
 
 
