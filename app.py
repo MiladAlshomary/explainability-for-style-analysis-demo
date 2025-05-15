@@ -25,21 +25,23 @@ def app(share=False):
         gr.Markdown("# Author Attribution Explainability Tool")
 
         # ── Dropdown and to select instance ─────────────────────────────
+
         dropdown = gr.Dropdown(
-            choices=[str(x) for x in instance_ids],
+            choices=['Task {}'.format(x) for x in instance_ids],
             value=str(instance_ids[0]),
-            label="Select instance"
+            label="Select one of the tasks that was predicted by the AA model"
         )
 
         # ── HTML outputs for author texts… ─────────────────────────────
+        header  = gr.HTML()
         mystery = gr.HTML()
         with gr.Row():
             c0, c1, c2 = gr.HTML(), gr.HTML(), gr.HTML()
 
         dropdown.change(
-            lambda iid: load_instance(iid, instances),
+            lambda iid: load_instance(int(iid.replace('Task ','')), instances),
             inputs=dropdown,
-            outputs=[mystery, c0, c1, c2]
+            outputs=[header, mystery, c0, c1, c2]
         )    
 
         # ── Visualization for clusters ─────────────────────────────

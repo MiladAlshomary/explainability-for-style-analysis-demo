@@ -40,6 +40,13 @@ def load_instance(instance_id, instances_to_explain: dict):
         iid = instance_id
     data = instances_to_explain[iid]
 
+    predicted_author = data['latent_rank'][0]
+
+    header_html = f"""
+    <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+      <h3>The following are the texts of the Mystery, and the canidate authors from this task.</h3>
+    </div>
+    """
     # Mystery author box
     mystery_html = f"""
     <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
@@ -54,8 +61,8 @@ def load_instance(instance_id, instances_to_explain: dict):
         text = data[f'a{i}_fullText']
         title = f"Candidate {i+1}"
         extra_style = ""
-        if data.get('rank_1') == i:
-            extra_style = "transform: scale(1.05); border: 2px solid #333; padding:10px;"
+        if predicted_author == i:
+            extra_style = "border:2px solid #228B22; padding:10px; "
         candidate_htmls.append(f"""
         <div style="border:1px solid #ccc; padding:10px; {extra_style}">
           <h4>{title}</h4>
@@ -63,7 +70,7 @@ def load_instance(instance_id, instances_to_explain: dict):
         </div>
         """)
 
-    return mystery_html, candidate_htmls[0], candidate_htmls[1], candidate_htmls[2]
+    return header_html, mystery_html, candidate_htmls[0], candidate_htmls[1], candidate_htmls[2]
 
 def compute_tsne_with_cache(embeddings: np.ndarray, cache_path: str = 'datasets/tsne_cache.pkl') -> np.ndarray:
     """
