@@ -106,7 +106,7 @@ def app(share=False):
 
         run_btn.click(
             fn=lambda iid: visualize_clusters_plotly(
-                int(iid), cfg, instances
+                int(iid.replace('Task ','')), cfg, instances
             ),
             inputs=[dropdown],
             outputs=[plot_out, features_rb, feature_list_state]
@@ -116,7 +116,7 @@ def app(share=False):
         show_btn       = gr.Button("Show Feature Spans")
         highlighted_out = gr.HTML()
 
-        show_btn.click(fn=lambda iid, sel_feat, all_feats: show_both_spans(client, iid, sel_feat, all_feats, instances, cfg),
+        show_btn.click(fn=lambda iid, sel_feat, all_feats: show_both_spans(client, iid.replace('Task ',''), sel_feat, all_feats, instances, cfg),
                        inputs=[dropdown, features_rb, feature_list_state],
                        outputs=[highlighted_out])
 

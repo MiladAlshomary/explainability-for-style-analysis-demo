@@ -44,7 +44,8 @@ def load_instance(instance_id, instances_to_explain: dict):
 
     header_html = f"""
     <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-      <h3>The following are the texts of the Mystery, and the canidate authors from this task.</h3>
+      <h3>The following are the texts of the Mystery, and the canidate authors.
+      Predicted author is highlighted with a green box</h3>
     </div>
     """
     # Mystery author box
@@ -248,7 +249,7 @@ def visualize_clusters_plotly(iid, cfg, instances):
 
     # layout tweaks
     fig.update_layout(
-        title="t-SNE of Author Embeddings",
+        title="Visualization of the task's authors in the latent space of the AA model.",
         width=900, height=600,
         dragmode='pan',
         legend=dict(itemsizing='constant'),
