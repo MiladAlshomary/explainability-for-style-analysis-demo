@@ -1,4 +1,5 @@
 nltk
+spacy
 scikit-learn
 ipympl
 ipywidgets
@@ -8,3 +9,4 @@ python-dotenv
 gradio
 pyyaml
 plotly
+git+https://github.com/eric-sclafani/gram2vec

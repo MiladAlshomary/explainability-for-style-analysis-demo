@@ -2,6 +2,8 @@ import gradio as gr
 import json
 
 from utils.visualizations import *
+from utils.llm_feat_utils import *
+from utils.gram2vec_feat_utils import *
 
 import yaml
 
@@ -97,6 +99,7 @@ def app(share=False):
         document.addEventListener("DOMNodeInserted", handleLegendClick);
         </script>
         """)
+        
         plot_out   = gr.Plot(
             label="Cluster Visualization",
             elem_id="cluster-plot"
@@ -113,15 +116,34 @@ def app(share=False):
         )
 
         # Show feature‐span highlighting
-        show_btn       = gr.Button("Show Feature Spans")
+        show_btn = gr.Button("Show LLM Feature Spans")
         highlighted_out = gr.HTML()
 
         show_btn.click(fn=lambda iid, sel_feat, all_feats: show_both_spans(client, iid.replace('Task ',''), sel_feat, all_feats, instances, cfg),
                        inputs=[dropdown, features_rb, feature_list_state],
                        outputs=[highlighted_out])
 
-        # features_rb = gr.Radio(choices=features_rb, label="Closest Cluster Features")
+        # ── Gram2Vec Feature Highlighting ─────────────────────────────
+        gr.Markdown("### Compare with Gram2Vec Feature Spans")
 
+        # Use static config-driven feature list
+        gram2vec_feature_list = [
+            "pos_unigrams:NOUN", "pos_unigrams:VERB", "pos_unigrams:DET",
+            "pos_bigrams:ADJ_NOUN", "func_words:the", "func_words:of", "punctuation:.",
+            "letters:uppercase", "emojis:😂", "dep_labels:nsubj", "morph_tags:Number=Plur",
+            "sentences:declarative"
+        ]
+        gram2vec_rb = gr.Radio(choices=gram2vec_feature_list, label="Gram2Vec Features")
+        gram_btn = gr.Button("Show Gram2Vec Feature Spans")
+        gram_html = gr.HTML()
+
+        gram_btn.click(
+            fn=lambda iid, sel_feat: show_gram2vec_spans_all(
+                int(iid.replace('Task ','')), sel_feat, instances
+            ),
+            inputs=[dropdown, gram2vec_rb],
+            outputs=[gram_html]
+        )
 
 
     demo.launch(share=share)
