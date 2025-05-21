@@ -115,17 +115,6 @@ def app(share=False):
             outputs=[plot_out, features_rb, feature_list_state]
         )
 
-        # Show feature‐span highlighting
-        show_btn = gr.Button("Show LLM Feature Spans")
-        highlighted_out = gr.HTML()
-
-        show_btn.click(fn=lambda iid, sel_feat, all_feats: show_both_spans(client, iid.replace('Task ',''), sel_feat, all_feats, instances, cfg),
-                       inputs=[dropdown, features_rb, feature_list_state],
-                       outputs=[highlighted_out])
-
-        # ── Gram2Vec Feature Highlighting ─────────────────────────────
-        gr.Markdown("### Compare with Gram2Vec Feature Spans")
-
         # Use static config-driven feature list
         gram2vec_feature_list = [
             "pos_unigrams:NOUN", "pos_unigrams:VERB", "pos_unigrams:DET",
@@ -133,17 +122,51 @@ def app(share=False):
             "letters:uppercase", "emojis:😂", "dep_labels:nsubj", "morph_tags:Number=Plur",
             "sentences:declarative"
         ]
-        gram2vec_rb = gr.Radio(choices=gram2vec_feature_list, label="Gram2Vec Features")
-        gram_btn = gr.Button("Show Gram2Vec Feature Spans")
-        gram_html = gr.HTML()
 
-        gram_btn.click(
-            fn=lambda iid, sel_feat: show_gram2vec_spans_all(
-                int(iid.replace('Task ','')), sel_feat, instances
+        gram2vec_rb = gr.Radio(choices=gram2vec_feature_list, label="Gram2Vec Features")
+
+        # Show combined feature‐span highlighting
+        combined_btn  = gr.Button("Show Combined Spans")
+        combined_html = gr.HTML()#"""
+        #         <style>
+        #         .mark-llm     { background-color: #fff176; }   /* yellow-200 */
+        #         .mark-gram    { background-color: #90caf9; }   /* light-blue-300 */
+        #         </style>
+        #         """
+        # )
+
+        gr.Markdown("### Highlight LLM (yellow) & Gram2Vec (blue) Spans Together")
+
+        combined_btn.click(
+            fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v: show_combined_spans_all(
+                client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v
             ),
-            inputs=[dropdown, gram2vec_rb],
-            outputs=[gram_html]
+            inputs=[dropdown, features_rb, feature_list_state, gram2vec_rb],
+            outputs=[combined_html]
         )
+
+        # ── LLM Feature Highlighting ─────────────────────────────
+        # show_btn = gr.Button("Show LLM Feature Spans")
+        # highlighted_out = gr.HTML()
+
+        # show_btn.click(fn=lambda iid, sel_feat, all_feats: show_both_spans(client, iid.replace('Task ',''), sel_feat, all_feats, instances, cfg),
+        #                inputs=[dropdown, features_rb, feature_list_state],
+        #                outputs=[highlighted_out])
+
+        # # ── Gram2Vec Feature Highlighting ─────────────────────────────
+        # gr.Markdown("### Compare with Gram2Vec Feature Spans")
+
+        
+        # gram_btn = gr.Button("Show Gram2Vec Feature Spans")
+        # gram_html = gr.HTML()
+
+        # gram_btn.click(
+        #     fn=lambda iid, sel_feat: show_gram2vec_spans_all(
+        #         int(iid.replace('Task ','')), sel_feat, instances
+        #     ),
+        #     inputs=[dropdown, gram2vec_rb],
+        #     outputs=[gram_html]
+        # )
 
 
     demo.launch(share=share)

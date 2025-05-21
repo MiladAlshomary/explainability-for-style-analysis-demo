@@ -1,64 +1,172 @@
 from gram2vec.feature_locator import find_feature_spans
 from gram2vec import vectorizer
 import re
+from collections import namedtuple
 
-def highlight_gram2vec_spans(text, feature_name):
-    try:
-        spans = find_feature_spans(text, feature_name)
-    except Exception:
-        spans = []
+Span = namedtuple('Span', ['start_char', 'end_char'])
 
-    if not spans:
-        return None
+import re
+from utils.llm_feat_utils import generate_feature_spans_cached
 
-    # Sort spans in reverse order to avoid index shifting
-    spans = sorted(spans, key=lambda s: s.start_char, reverse=True)
-    for span in spans:
-        text = (
-            text[:span.start_char]
-            + f"<mark>{text[span.start_char:span.end_char]}</mark>"
-            + text[span.end_char:]
-        )
-    return text
+# def highlight_both_spans(text, llm_spans, gram_spans):
+#     """
+#     Given a text and two lists of (start, end) spans:
+#       - Wrap llm_spans in <mark class="mark-llm">
+#       - Wrap gram_spans in <mark class="mark-gram">
+#     We merge them and apply in reverse order to avoid index shifts.
+#     """
+#     # Inline CSS
+#     style = """
+#     <style>
+#       .mark-llm  { background-color: #fff176; }   /* yellow-200 */
+#       .mark-gram { background-color: #90caf9; }   /* light-blue-300 */
+#     </style>
+#     """
+#     # tag each span with its type
+#     tagged = [(s.start_char, s.end_char, 'llm') for s in llm_spans] + \
+#              [(s.start_char, s.end_char, 'gram') for s in gram_spans]
 
-def show_gram2vec_spans_all(iid, selected_feature, instances):
+#     # sort by start descending so earlier edits don't shift later ones
+#     tagged_sorted = sorted(tagged, key=lambda x: x[0], reverse=True)
+    
+#     # Apply markings
+#     highlighted = text
+#     for start, end, typ in tagged_sorted:
+#         cls = 'mark-llm' if typ == 'llm' else 'mark-gram'
+#         snippet = highlighted[start:end]
+#         highlighted = (
+#             highlighted[:start]
+#             + f'<mark class="{cls}">{snippet}</mark>'
+#             + highlighted[end:]
+#         )
+#     # for start, end, typ in tagged_sorted:
+#     #     cls = 'mark-llm' if typ == 'llm' else 'mark-gram'
+#     #     snippet = text[start:end]
+#     #     # escape snippet if needed; assuming safe here
+#     #     text = text[:start] + f'<mark class="{cls}">{snippet}</mark>' + text[end:]
+#     # return text
+#     return style + highlighted
+import html
+
+def highlight_both_spans(text, llm_spans, gram_spans):
+    """
+    Walk the original `text` once, injecting <mark> tags at the correct offsets,
+    so that nested or overlapping highlights never stomp on each other.
+    """
+
+    # 1) Inline CSS
+    style = """
+    <style>
+      .mark-llm  { background-color: #fff176; }
+      .mark-gram { background-color: #90caf9; }
+    </style>
+    """
+
+    # 2) Turn each span into two “events”: open and close
+    events = []
+    for s in llm_spans:
+        events.append((s.start_char, 'open',  'llm'))
+        events.append((s.end_char,   'close', 'llm'))
+    for s in gram_spans:
+        events.append((s.start_char, 'open',  'gram'))
+        events.append((s.end_char,   'close', 'gram'))
+
+    # 3) Sort by position; opens before closes at the same index
+    events.sort(key=lambda e: (e[0], 0 if e[1]=='open' else 1))
+
+    print(events)
+
+    # 4) Walk through text and spit out tags/text
+    out = []
+    last_idx = 0
+    for idx, typ, cls in events:
+        # escape the slice between last index and this event
+        out.append(html.escape(text[last_idx:idx]))
+        if typ == 'open':
+            out.append(f'<mark class="mark-{cls}">')
+        else:
+            out.append('</mark>')
+        last_idx = idx
+
+    # 5) Append any trailing text
+    out.append(html.escape(text[last_idx:]))
+
+    # 6) Join everything
+    highlighted = "".join(out)
+
+    # 7) Return CSS + highlighted HTML
+    return style + highlighted
+
+
+def show_combined_spans_all(client, iid, selected_feature_llm, features_list, instances, selected_feature_g2v):
+    """
+    For mystery + 3 candidates:
+     1. get llm spans via your existing cache+API
+     2. get gram2vec spans via find_feature_spans
+     3. merge and highlight both
+    """
     iid = int(iid)
     inst = instances[iid]
 
-    mystery_text = inst['Q_fullText']
-    pred_idx     = inst['latent_rank'][0]
-    cand1_text   = inst[f'a{pred_idx}_fullText']
-    idx_2        = inst['latent_rank'][1]
-    idx_3        = inst['latent_rank'][2]
-    cand2_text   = inst[f'a{idx_2}_fullText']
-    cand3_text   = inst[f'a{idx_3}_fullText']
+    # texts
+    texts = [
+      ("Mystery Author", inst['Q_fullText']),
+      ("Predicted Candidate", inst[f'a{inst["latent_rank"][0]}_fullText']),
+      ("Candidate 2",         inst[f'a{inst["latent_rank"][1]}_fullText']),
+      ("Candidate 3",         inst[f'a{inst["latent_rank"][2]}_fullText']),
+    ]
 
-    mystery_out = highlight_gram2vec_spans(mystery_text, selected_feature)
-    cand1_out   = highlight_gram2vec_spans(cand1_text, selected_feature)
-    cand2_out   = highlight_gram2vec_spans(cand2_text, selected_feature)
-    cand3_out   = highlight_gram2vec_spans(cand3_text, selected_feature)
+    # get llm spans map (list of spans objects) for each text
+    llm_maps = [
+      generate_feature_spans_cached(client, f"{iid}", texts[0][1], features_list, role="mystery"),
+      generate_feature_spans_cached(client, f"{iid}_cand0",   texts[1][1], features_list, role="candidate"),
+      generate_feature_spans_cached(client, f"{iid}_cand1",   texts[2][1], features_list, role="candidate"),
+      generate_feature_spans_cached(client, f"{iid}_cand2",   texts[3][1], features_list, role="candidate"),
+    ]
+    # get span indexes for each text
+    llm_spans_list = [
+        [
+            # positional: first arg → start_char, second → end_char
+            Span(txt.find(s), txt.find(s) + len(s))
+            for s in llm_maps[i].get(selected_feature_llm, [])
+            if s in txt
+        ]
+        for i, (_, txt) in enumerate(texts)
+    ]
 
+    # get gram2vec spans
+    gram_spans_list = []
+    for role, txt in texts:
+        try:
+            print(f"Finding spans for {selected_feature_g2v} {role}")
+            spans = find_feature_spans(txt, selected_feature_g2v)
+        except:
+            spans = []
+        gram_spans_list.append(spans)
+
+    # build HTML blocks
     html = []
-
-    def author_block(name, original_text, highlighted_text):
-        if highlighted_text is None:
-            return f"""
-            <h3>{name}</h3>
-            <div style="padding:10px; border:1px solid #ccc;">
-              <strong style="color:red;">Feature “{selected_feature}” not present.</strong>
-              <p>{original_text}</p>
+    for i, (label, txt) in enumerate(texts):
+        combined = highlight_both_spans(txt, llm_spans_list[i], gram_spans_list[i])
+        notice = ""
+        if not llm_spans_list[i]:
+            notice += f"""
+            <div style="padding:8px; background:#fee; border:1px solid #f00;">
+              <em>No "{selected_feature_llm}" spans found.</em>
             </div>
             """
-        return f"""
-        <h3>{name}</h3>
-        <div style="padding:10px; border:1px solid #ccc;">
-          <p>{highlighted_text}</p>
-        </div>
-        """
+        if not gram_spans_list[i]:
+            notice += f"""
+            <div style="padding:8px; background:#fee; border:1px solid #f00;">
+              <em>No "{selected_feature_g2v}" spans found.</em>
+            </div>
+            """
+        html.append(f"""
+          <h3>{label}</h3>
+          {notice}
+          <div style="border:1px solid #ccc; padding:8px; margin-bottom:1em;">
+            {combined}
+          </div>
+        """)
 
-    html.append(author_block("Mystery Author", mystery_text, mystery_out))
-    html.append(author_block(f"Predicted Candidate - C{pred_idx+1}", cand1_text, cand1_out))
-    html.append(author_block(f"Candidate - C{idx_2+1}", cand2_text, cand2_out))
-    html.append(author_block(f"Candidate - C{idx_3+1}", cand3_text, cand3_out))
-
-    return "<div style='margin-top:10px'>" + "\n<hr>\n".join(html) + "</div>"
+    return "<div>" + "\n<hr>\n".join(html) + "</div>"
