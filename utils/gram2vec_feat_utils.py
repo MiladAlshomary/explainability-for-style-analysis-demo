@@ -13,17 +13,54 @@ Span = namedtuple('Span', ['start_char', 'end_char'])
 from gram2vec import vectorizer
 
 FEATURE_HANDLERS = {
-    "pos_unigrams",
-    "pos_bigrams",
-    "func_words",
-    "punctuation",
-    "letters",
-    "dep_labels",
-    "morph_tags",
-    "sentences",
-    "emojis"
+    "pos_unigrams":    "Part-of-Speech Unigram",
+    "pos_bigrams":     "Part-of-Speech Bigram",
+    "func_words":      "Function Word",
+    "punctuation":     "Punctuation",
+    "letters":         "Letter",
+    "dep_labels":      "Dependency Label",
+    "morph_tags":      "Morphological Tag",
+    "sentences":       "Sentence Type",
+    "emojis":          "Emoji"
 }
 
+feature_choices = {} 
+
+def load_human_readable_mapping(path="utils/human_readable.txt") -> dict[str,str]:
+    """
+    Reads lines like "ADJ: Adjective" and returns {"ADJ":"Adjective", ...}
+    """
+    mapping = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or ':' not in line:
+                continue
+            key, val = line.split(":", 1)
+            mapping[key.lower().strip()] = val.strip()
+    return mapping
+
+def human_readable_feature_choices(
+    features: list[str],
+    mapping_file: str = "utils/human_readable.txt"
+) -> list[dict]:
+    """
+    Given a list of Gram2Vec feature keys (e.g. "pos_unigrams:AUX"),
+    returns a list of {"label":..., "value":...} dicts for gr.Radio.
+    Label includes both the group name and the code’s human text:
+      "Part-of-Speech Unigram: Auxiliary verb" for "pos_unigrams:AUX"
+    """
+    hr_map = load_human_readable_mapping(mapping_file)
+    for feat in features:
+        if ":" not in feat:
+            continue
+        handler, code = feat.split(":", 1)
+        code = code.lower()
+        group_name = FEATURE_HANDLERS.get(handler, handler)
+        code_name  = hr_map.get(code, code)
+        label = f"{group_name}: {code_name}"
+        feature_choices[label]=feat
+    return feature_choices
 
 def get_top_gram2vec_features(iid: int, instances: list, top_n: int = 10) -> list[str]:
     """
@@ -38,7 +75,7 @@ def get_top_gram2vec_features(iid: int, instances: list, top_n: int = 10) -> lis
     # pick only those with a positive value, remove those which dont have a feature handler, sort descending, take top_n
     nonzero = row[row > 0]
     filtered = nonzero[[feat for feat in nonzero.index
-                        if feat.split(":", 1)[0] in FEATURE_HANDLERS]]
+                        if feat.split(":", 1)[0] in FEATURE_HANDLERS.keys()]]
     top_feats = (
         filtered
            .sort_values(ascending=False)
@@ -46,7 +83,9 @@ def get_top_gram2vec_features(iid: int, instances: list, top_n: int = 10) -> lis
            .index
            .tolist()
     )
-    return update(choices=top_feats, value=top_feats[0]), top_feats
+    top_feats = human_readable_feature_choices(top_feats, mapping_file="utils/human_readable.txt")
+    keys = list(top_feats.keys())
+    return update(choices=keys, value=keys[0]), top_feats
 
 
 def highlight_both_spans(text, llm_spans, gram_spans):
@@ -132,8 +171,8 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
     gram_spans_list = []
     for role, txt in texts:
         try:
-            print(f"Finding spans for {selected_feature_g2v} {role}")
-            spans = find_feature_spans(txt, selected_feature_g2v)
+            print(f"Finding spans for {feature_choices[selected_feature_g2v]} {role}")
+            spans = find_feature_spans(txt, feature_choices[selected_feature_g2v])
         except:
             spans = []
         gram_spans_list.append(spans)
