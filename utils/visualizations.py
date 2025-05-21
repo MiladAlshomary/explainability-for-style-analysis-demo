@@ -47,15 +47,27 @@ def load_instance(instance_id, instances_to_explain: dict):
 
     header_html = f"""
     <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-      <h3>The following are the texts of the Mystery, and the canidate authors.
-      Predicted author is highlighted with a green box</h3>
+      <h3>Here’s the mystery passage alongside three candidate texts—look for the green highlight to see the predicted author.</h3>
     </div>
     """
     # Mystery author box
+    # mystery_html = f"""
+    # <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+    #   <h3>Mystery Author</h3>
+    #   <p>{clean_text(data['Q_fullText'])}</p>
+    # </div>
+    # """
+    mystery_text = clean_text(data['Q_fullText'])
     mystery_html = f"""
-    <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-      <h3>Mystery Author</h3>
-      <p>{clean_text(data['Q_fullText'])}</p>
+    <div style="
+            border: 2px solid #ff5722;      /* accent border */
+            background: #fff3e0;            /* very light matching wash */
+            border-radius: 6px;
+            padding: 1em;
+            margin-bottom: 1em;
+        ">
+        <h3 style="margin-top:0; color:#bf360c;">Mystery Author</h3>
+        <p>{clean_text(mystery_text)}</p>
     </div>
     """
 
@@ -66,7 +78,13 @@ def load_instance(instance_id, instances_to_explain: dict):
         title = f"Candidate {i+1}"
         extra_style = ""
         if predicted_author == i:
-            extra_style = "border:2px solid #228B22; padding:10px; "
+            title += " (Predicted Author)"
+            extra_style = (
+                "border:2px solid #228B22; "        # dark green border
+                "background-color: #e6ffe6; "       # light green fill
+                "padding:10px; "
+            )
+
         candidate_htmls.append(f"""
         <div style="border:1px solid #ccc; padding:10px; {extra_style}">
           <h4>{title}</h4>
@@ -250,13 +268,70 @@ def visualize_clusters_plotly(iid, cfg, instances):
         hoverinfo='skip'
     ))
 
-    # layout tweaks
-    fig.update_layout(
-        title="Visualization of the task's authors in the latent space of the AA model.",
-        width=900, height=600,
-        dragmode='pan',
-        legend=dict(itemsizing='constant'),
-        margin=dict(l=40,r=40,t=60,b=40)
+    # ── Arrowed annotations for mystery + candidates ──────────────────────────
+    # Mystery author (red star)
+    fig.add_annotation(
+        x=q_proj[0], y=q_proj[1],
+        xref='x', yref='y',
+        text="Mystery",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=1.5,
+        ax=40,   # tail offset in pixels: moves the label 40px to the right
+        ay=-40,  # moves the label 40px up
+        font=dict(color='red', size=12)
     )
+
+    # Candidate authors (dark blue ◆)
+    offsets = [(-40, -30), (40, -30), (0, 40)]  # [(ax,ay) for Cand1, Cand2, Cand3]
+    for i in range(3):
+        fig.add_annotation(
+            x=c_proj[i,0], y=c_proj[i,1],
+            xref='x', yref='y',
+            text=f"Candidate {i+1}",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=1.5,
+            ax=offsets[i][0],
+            ay=offsets[i][1],
+            font=dict(color='darkblue', size=12)
+        )
+
+    # # layout tweaks
+    # fig.update_layout(
+    #     title="Visualization of the task's authors in the latent space of the AA model.",
+    #     width=900, height=600,
+    #     dragmode='pan',
+    #     legend=dict(itemsizing='constant'),
+    #     margin=dict(l=40,r=260,t=60,b=100)
+    # )
+    
+    # # ── Explanatory text about centroids & clustering ──
+    # description = (
+    #     "This plot shows the mystery author and three candidate authors in the AA model’s latent space.<br>"
+    #     "The grey ▲ points are the centroids of the clusters in the AA model’s latent space.<br>"
+    #     "Each ▲ centroid shows a clusters average style embedding- <br>"
+    #     "documents near that point share similar writing styles.  <br>"
+    #     "We place the ★ mystery document and ◆ candidate texts<br>"
+    #     "into this space to see which author‐cluster it falls into.<br>"
+    #     "Zoom in to see a cluster centroid and its features<br>"
+    # )
+    # fig.add_annotation(
+    #     x=1.01, y=0.02,                    
+    #     xref='paper', yref='paper',
+    #     xanchor='left', yanchor='bottom',
+    #     text=description,
+    #     showarrow=False,
+    #     align='left',
+    #     font=dict(size=12, color='black'),
+    #     bgcolor='rgba(255,255,255,0.7)',
+    #     bordercolor='black',
+    #     borderwidth=1,
+    #     borderpad=6,
+    #     width=200
+    # )
+
     # returning the figure, the radio button choices and the complete feature list
     return fig, update(choices=feature_list, value=feature_list[0]),feature_list

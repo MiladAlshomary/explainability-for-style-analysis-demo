@@ -4,10 +4,34 @@ import html
 from collections import namedtuple
 from gram2vec.feature_locator import find_feature_spans
 from gram2vec import vectorizer
+from gradio import update
 
 from utils.llm_feat_utils import generate_feature_spans_cached
 
 Span = namedtuple('Span', ['start_char', 'end_char'])
+
+from gram2vec import vectorizer
+
+def get_top_gram2vec_features(iid: int, instances: list, top_n: int = 10) -> list[str]:
+    """
+    Vectorize the mystery text with *all* Gram2Vec features turned on,
+    then return the top_n non-zero features sorted by value.
+    """
+    iid = int(iid)
+    text = instances[iid]["Q_fullText"]
+    # by default, from_documents() turns on every registered feature
+    df = vectorizer.from_documents([text])
+    row = df.iloc[0]
+    # pick only those with a positive value, sort descending, take top_n
+    top_feats = (
+        row[row > 0]
+           .sort_values(ascending=False)
+           .head(top_n)
+           .index
+           .tolist()
+    )
+    return update(choices=top_feats, value=top_feats[0]), top_feats
+
 
 def highlight_both_spans(text, llm_spans, gram_spans):
     """
@@ -35,7 +59,7 @@ def highlight_both_spans(text, llm_spans, gram_spans):
     # Sort by position;
     events.sort(key=lambda e: (e[0], 0 if e[1]=='open' else 1))
 
-    print(events)
+    # print(events)
 
     out = []
     last_idx = 0
