@@ -1,52 +1,13 @@
+import re
+import html
+
+from collections import namedtuple
 from gram2vec.feature_locator import find_feature_spans
 from gram2vec import vectorizer
-import re
-from collections import namedtuple
 
-Span = namedtuple('Span', ['start_char', 'end_char'])
-
-import re
 from utils.llm_feat_utils import generate_feature_spans_cached
 
-# def highlight_both_spans(text, llm_spans, gram_spans):
-#     """
-#     Given a text and two lists of (start, end) spans:
-#       - Wrap llm_spans in <mark class="mark-llm">
-#       - Wrap gram_spans in <mark class="mark-gram">
-#     We merge them and apply in reverse order to avoid index shifts.
-#     """
-#     # Inline CSS
-#     style = """
-#     <style>
-#       .mark-llm  { background-color: #fff176; }   /* yellow-200 */
-#       .mark-gram { background-color: #90caf9; }   /* light-blue-300 */
-#     </style>
-#     """
-#     # tag each span with its type
-#     tagged = [(s.start_char, s.end_char, 'llm') for s in llm_spans] + \
-#              [(s.start_char, s.end_char, 'gram') for s in gram_spans]
-
-#     # sort by start descending so earlier edits don't shift later ones
-#     tagged_sorted = sorted(tagged, key=lambda x: x[0], reverse=True)
-    
-#     # Apply markings
-#     highlighted = text
-#     for start, end, typ in tagged_sorted:
-#         cls = 'mark-llm' if typ == 'llm' else 'mark-gram'
-#         snippet = highlighted[start:end]
-#         highlighted = (
-#             highlighted[:start]
-#             + f'<mark class="{cls}">{snippet}</mark>'
-#             + highlighted[end:]
-#         )
-#     # for start, end, typ in tagged_sorted:
-#     #     cls = 'mark-llm' if typ == 'llm' else 'mark-gram'
-#     #     snippet = text[start:end]
-#     #     # escape snippet if needed; assuming safe here
-#     #     text = text[:start] + f'<mark class="{cls}">{snippet}</mark>' + text[end:]
-#     # return text
-#     return style + highlighted
-import html
+Span = namedtuple('Span', ['start_char', 'end_char'])
 
 def highlight_both_spans(text, llm_spans, gram_spans):
     """
@@ -54,15 +15,15 @@ def highlight_both_spans(text, llm_spans, gram_spans):
     so that nested or overlapping highlights never stomp on each other.
     """
 
-    # 1) Inline CSS
+    # Inline CSS : mark-llm is in yellow, mark-gram in blue
     style = """
     <style>
-      .mark-llm  { background-color: #fff176; }
+      .mark-llm  { background-color: #fff176; } 
       .mark-gram { background-color: #90caf9; }
     </style>
     """
 
-    # 2) Turn each span into two “events”: open and close
+    # Turn each span into two “events”: open and close
     events = []
     for s in llm_spans:
         events.append((s.start_char, 'open',  'llm'))
@@ -71,12 +32,11 @@ def highlight_both_spans(text, llm_spans, gram_spans):
         events.append((s.start_char, 'open',  'gram'))
         events.append((s.end_char,   'close', 'gram'))
 
-    # 3) Sort by position; opens before closes at the same index
+    # Sort by position;
     events.sort(key=lambda e: (e[0], 0 if e[1]=='open' else 1))
 
     print(events)
 
-    # 4) Walk through text and spit out tags/text
     out = []
     last_idx = 0
     for idx, typ, cls in events:
@@ -88,13 +48,9 @@ def highlight_both_spans(text, llm_spans, gram_spans):
             out.append('</mark>')
         last_idx = idx
 
-    # 5) Append any trailing text
     out.append(html.escape(text[last_idx:]))
-
-    # 6) Join everything
     highlighted = "".join(out)
 
-    # 7) Return CSS + highlighted HTML
     return style + highlighted
 
 
