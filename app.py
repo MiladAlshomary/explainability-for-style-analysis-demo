@@ -31,30 +31,6 @@ def app(share=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
-        # ── Global CSS for bolder labels & borders ──
-        # gr.HTML("""
-        # <style>
-        #   /* Make all labels bold */
-        #   .gradio-container label { font-weight: 600; }
-        #   /* Make HTML boxes stand out */
-        #   .gradio-container .output-html { 
-        #     border: 2px solid #888; 
-        #     border-radius: 4px; 
-        #     padding: 0.5em; 
-        #     margin-bottom: 1em;
-        #   }
-        # </style>
-        # """)
-
-        # ── Main Title + Short Description ──
-        # gr.HTML(styled_block("<h1 style='text-align:center'>Author Attribution Explainability Tool</h1>"))
-
-        # gr.Markdown(
-        #         "This demo helps you **see inside** a deep AA model’s latent style space:  \n"
-        #         "- **Cluster** your mystery document among known authors  \n"
-        #         "- **Generate** human-readable style features via LLMs  \n"
-        #         "- **Compare** against Gram2Vec stylometrics  \n"
-        # )
         # ── Big Centered Title ──────────────────────────────────────────
         gr.HTML(styled_block("""
         <h1 style="
@@ -67,23 +43,6 @@ def app(share=False):
         </h1>
         """))
 
-        # ── Larger Description ───────────────────────────────────────────
-        # gr.HTML(styled_block("""
-        # <div style="
-        #     font-size:1.25em;   /* About 20px */
-        #     line-height:1.6;
-        #     text-align:center;
-        #     max-width:800px;
-        #     margin:0 auto 1em auto;
-        # ">
-        #     This demo helps you <strong>see inside</strong> a deep AA model’s latent style space:
-        #     <ul style="list-style:disc; display:inline-block; text-align:left; margin-top:0.5em;">
-        #     <li><strong>Cluster</strong> your mystery document among known authors</li>
-        #     <li><strong>Generate</strong> human-readable style features via LLMs</li>
-        #     <li><strong>Compare</strong> against Gram2Vec stylometrics</li>
-        #     </ul>
-        # </div>
-        # """))
         gr.HTML(styled_block("""
         <div style="
             text-align:center;
@@ -141,11 +100,20 @@ def app(share=False):
 
 
         # ── Dropdown and to select instance ─────────────────────────────
+        gr.HTML("""
+                    <div style="
+                        font-size: 1.3em;
+                        font-weight: 600;
+                        margin-bottom: 0.5em;
+                    ">
+                        Pick a task from the AA model’s predictions (a mystery text and its three candidate authors)
+                    </div>
+                    """)
+
         dropdown = gr.Dropdown(
             choices=[f"Task {i}" for i in instance_ids],
             value=f"Task {instance_ids[0]}",
-            label="Pick a task from the AA model’s predictions (a mystery text and its three candidate authors).",
-            info="Choose which mystery document to explain"
+            label="Choose which mystery document to explain",
         )
 
 

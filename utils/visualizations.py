@@ -6,8 +6,6 @@ import pickle as pkl
 import os
 import hashlib
 import pandas as pd
-# from matplotlib import pyplot as plt
-# import matplotlib.cm as cm
 import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
@@ -50,13 +48,6 @@ def load_instance(instance_id, instances_to_explain: dict):
       <h3>Here’s the mystery passage alongside three candidate texts—look for the green highlight to see the predicted author.</h3>
     </div>
     """
-    # Mystery author box
-    # mystery_html = f"""
-    # <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-    #   <h3>Mystery Author</h3>
-    #   <p>{clean_text(data['Q_fullText'])}</p>
-    # </div>
-    # """
     mystery_text = clean_text(data['Q_fullText'])
     mystery_html = f"""
     <div style="
@@ -250,7 +241,7 @@ def visualize_clusters_plotly(iid, cfg, instances):
     # three candidates
     marker_syms = ['diamond','pentagon','x']
     for i in range(3):
-        label = f"Candidate {i+1}" + (" (pred)" if i==pred_idx else "")
+        label = f"Candidate {i+1}" + (" (predicted)" if i==pred_idx else "")
         fig.add_trace(go.Scattergl(
             x=[c_proj[i,0]], y=[c_proj[i,1]],
             mode='markers',
@@ -289,7 +280,7 @@ def visualize_clusters_plotly(iid, cfg, instances):
         fig.add_annotation(
             x=c_proj[i,0], y=c_proj[i,1],
             xref='x', yref='y',
-            text=f"Candidate {i+1}",
+            text= f"Candidate {i+1}" + (" (Predicted)" if i == pred_idx else ""),
             showarrow=True,
             arrowhead=2,
             arrowsize=1,
@@ -298,40 +289,6 @@ def visualize_clusters_plotly(iid, cfg, instances):
             ay=offsets[i][1],
             font=dict(color='darkblue', size=12)
         )
-
-    # # layout tweaks
-    # fig.update_layout(
-    #     title="Visualization of the task's authors in the latent space of the AA model.",
-    #     width=900, height=600,
-    #     dragmode='pan',
-    #     legend=dict(itemsizing='constant'),
-    #     margin=dict(l=40,r=260,t=60,b=100)
-    # )
-    
-    # # ── Explanatory text about centroids & clustering ──
-    # description = (
-    #     "This plot shows the mystery author and three candidate authors in the AA model’s latent space.<br>"
-    #     "The grey ▲ points are the centroids of the clusters in the AA model’s latent space.<br>"
-    #     "Each ▲ centroid shows a clusters average style embedding- <br>"
-    #     "documents near that point share similar writing styles.  <br>"
-    #     "We place the ★ mystery document and ◆ candidate texts<br>"
-    #     "into this space to see which author‐cluster it falls into.<br>"
-    #     "Zoom in to see a cluster centroid and its features<br>"
-    # )
-    # fig.add_annotation(
-    #     x=1.01, y=0.02,                    
-    #     xref='paper', yref='paper',
-    #     xanchor='left', yanchor='bottom',
-    #     text=description,
-    #     showarrow=False,
-    #     align='left',
-    #     font=dict(size=12, color='black'),
-    #     bgcolor='rgba(255,255,255,0.7)',
-    #     bordercolor='black',
-    #     borderwidth=1,
-    #     borderpad=6,
-    #     width=200
-    # )
 
     # returning the figure, the radio button choices and the complete feature list
     return fig, update(choices=feature_list, value=feature_list[0]),feature_list

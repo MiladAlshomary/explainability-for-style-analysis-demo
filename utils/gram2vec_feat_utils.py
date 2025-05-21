@@ -12,6 +12,19 @@ Span = namedtuple('Span', ['start_char', 'end_char'])
 
 from gram2vec import vectorizer
 
+FEATURE_HANDLERS = {
+    "pos_unigrams",
+    "pos_bigrams",
+    "func_words",
+    "punctuation",
+    "letters",
+    "dep_labels",
+    "morph_tags",
+    "sentences",
+    "emojis"
+}
+
+
 def get_top_gram2vec_features(iid: int, instances: list, top_n: int = 10) -> list[str]:
     """
     Vectorize the mystery text with *all* Gram2Vec features turned on,
@@ -22,9 +35,12 @@ def get_top_gram2vec_features(iid: int, instances: list, top_n: int = 10) -> lis
     # by default, from_documents() turns on every registered feature
     df = vectorizer.from_documents([text])
     row = df.iloc[0]
-    # pick only those with a positive value, sort descending, take top_n
+    # pick only those with a positive value, remove those which dont have a feature handler, sort descending, take top_n
+    nonzero = row[row > 0]
+    filtered = nonzero[[feat for feat in nonzero.index
+                        if feat.split(":", 1)[0] in FEATURE_HANDLERS]]
     top_feats = (
-        row[row > 0]
+        filtered
            .sort_values(ascending=False)
            .head(top_n)
            .index
@@ -58,8 +74,6 @@ def highlight_both_spans(text, llm_spans, gram_spans):
 
     # Sort by position;
     events.sort(key=lambda e: (e[0], 0 if e[1]=='open' else 1))
-
-    # print(events)
 
     out = []
     last_idx = 0
@@ -132,13 +146,13 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
         if not llm_spans_list[i]:
             notice += f"""
             <div style="padding:8px; background:#fee; border:1px solid #f00;">
-              <em>No "{selected_feature_llm}" spans found.</em>
+              <em>No spans found for LLM feature "{selected_feature_llm}".</em>
             </div>
             """
         if not gram_spans_list[i]:
             notice += f"""
             <div style="padding:8px; background:#fee; border:1px solid #f00;">
-              <em>No "{selected_feature_g2v}" spans found.</em>
+              <em>No spans found for Gram2Vec feature "{selected_feature_g2v}".</em>
             </div>
             """
         html.append(f"""
