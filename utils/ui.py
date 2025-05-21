@@ -31,12 +31,6 @@ def styled_block(content: str) -> str:
     """
     return GLOBAL_CSS + "\n" + content
 
-def styled_markdown(md: str) -> str:
-    """
-    Wraps Markdown text with global CSS. Pass the result to gr.HTML().
-    """
-    return styled_block(md)
-
 def styled_html(html_content: str) -> str:
     """
     Wraps raw HTML content with global CSS. Pass the result to gr.HTML().
