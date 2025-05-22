@@ -39,7 +39,7 @@ def app(share=False):
             margin-bottom:0.3em;
             font-weight:700;
         ">
-            Author Attribution Explainability Tool
+            Author Attribution (AA) Explainability Tool
         </h1>
         """))
 
@@ -52,6 +52,9 @@ def app(share=False):
             <p style="font-size:1.3em; line-height:1.4;">
             This demo helps you <strong>see inside</strong> a deep AA model’s latent style space.
             </p>
+            <p style="font-size:0.9em; line-height:1.4;">
+            Currently you are inspecting <a href="https://huggingface.co/rrivera1849/LUAR-MUD">LUAR</a> with pre-defined AA tasks from the <a href="https://www.iarpa.gov/images/research-programs/HIATUS/IARPA_HIATUS_Phase_1_HRS_Data.to_DAC_20240610.pdf">HRS dataset </a> 
+            </p>
             <div style="
             display:flex;
             justify-content:center;
@@ -63,7 +66,7 @@ def app(share=False):
                 <div style="font-size:2em;">🔍</div>
                 <h4 style="margin:0.2em 0;">Cluster</h4>
                 <p style="margin:0; font-size:1em; line-height:1.3;">
-                Place your mystery text among known authors.
+                Place your AA task with respect to other background authors.
                 </p>
             </div>
             <!-- GENERATE -->
@@ -71,7 +74,7 @@ def app(share=False):
                 <div style="font-size:2em;">✏️</div>
                 <h4 style="margin:0.2em 0;">Generate</h4>
                 <p style="margin:0; font-size:1em; line-height:1.3;">
-                Create human-readable style features via LLMs.
+                Describe your investigated authors' writing style via human-readable LLM-generated style features.
                 </p>
             </div>
             <!-- COMPARE -->
@@ -79,7 +82,7 @@ def app(share=False):
                 <div style="font-size:2em;">⚖️</div>
                 <h4 style="margin:0.2em 0;">Compare</h4>
                 <p style="margin:0; font-size:1em; line-height:1.3;">
-                Contrast with Gram2Vec stylometric features.
+                Contrast with <a href=""https://github.com/eric-sclafani/gram2vec>Gram2Vec</a> stylometric features.
                 </p>
             </div>
             </div>
@@ -90,11 +93,11 @@ def app(share=False):
         # ── Step-by-Step Guided Panel ──
         with gr.Accordion("📝 How to Use", open=True):
             gr.Markdown("""
-                    1. **Select** a task from the dropdown  
-                    2. Click **Run Visualization** to see latent clusters  
+                    1. **Select** a pre-defined task from the dropdown
+                    2. Click **Run Visualization** to see where the authors are located in the AA model's space
                     3. Pick an **LLM feature** to highlight in yellow  
                     4. Pick a **Gram2Vec feature** to highlight in blue  
-                    5. Click **Show Combined Spans** to compare side-by-side  
+                    5. Click **Show Combined Spans** to compare side-by-side
                     """
             )
 
@@ -106,7 +109,7 @@ def app(share=False):
                         font-weight: 600;
                         margin-bottom: 0.5em;
                     ">
-                        Pick a task from the AA model’s predictions (a mystery text and its three candidate authors)
+                        Pick a pre-defined task to investigate (a mystery text and its three candidate authors)
                     </div>
                     """)
 
@@ -144,8 +147,8 @@ def app(share=False):
                     <p>
                     This plot shows the mystery author (★) and three candidate authors (◆) 
                     in the AA model’s latent space.<br>
-                    Grey ▲ are the cluster centroids—each represents an author’s average style. 
-                    Documents near that ▲ share similar writing styles.<br>
+                    Grey ▲ are identified salient regions in the AA model's space—each has a specific writing style. 
+                    Hover over the ▲ to see the top 10 writing style features<br>
                     Place your mystery text in this space to see which author‐cluster it falls into, 
                     then zoom in on a centroid to inspect its top style features.
                     </p>

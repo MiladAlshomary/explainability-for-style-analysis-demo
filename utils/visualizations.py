@@ -42,6 +42,7 @@ def load_instance(instance_id, instances_to_explain: dict):
     data = instances_to_explain[iid]
 
     predicted_author = data['latent_rank'][0]
+    ground_truth_author = data['gt_idx']
 
     header_html = f"""
     <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
@@ -68,8 +69,22 @@ def load_instance(instance_id, instances_to_explain: dict):
         text = data[f'a{i}_fullText']
         title = f"Candidate {i+1}"
         extra_style = ""
+
+        if ground_truth_author == i:
+            if ground_truth_author != predicted_author: # highlight the true author only if its different than the predictd one
+                title += " (True Author)"
+                extra_style = (
+                    "border: 2px solid #ff5722; "
+                    "background: #fff3e0; "
+                    "padding:10px; "
+                )
+
+        
         if predicted_author == i:
-            title += " (Predicted Author)"
+            if predicted_author == ground_truth_author:
+                title += " (Predicted and True Author)"
+            else:
+                title += " (Predicted Author)"
             extra_style = (
                 "border:2px solid #228B22; "        # dark green border
                 "background-color: #e6ffe6; "       # light green fill
@@ -213,6 +228,7 @@ def visualize_clusters_plotly(iid, cfg, instances):
         margin=dict(l=40,r=40,t=60,b=40),
         autosize=True,
         hovermode='closest')
+
 
     # uncomment the following line to show background authors
     ## background authors (light grey dots)
