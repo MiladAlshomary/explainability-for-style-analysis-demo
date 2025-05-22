@@ -231,7 +231,7 @@ class ExplainabilityDemo():
         query_author_latent   = np.array(self.instances_to_explain[instance_id]['author_latents'][:1])
         candid_author_latents = np.array(self.instances_to_explain[instance_id]['author_latents'][1:])
         predicted_author_idx = self.instances_to_explain[instance_id]['latent_rank'][0]
-    
+        ground_truth_author_idx = self.instances_to_explain[instance_id]['gt_idx']
         selected_clusters = self.instances_to_explain[instance_id]['rep_clusters']
     
         centroid_embeddings = np.array([x[1] for x in dimension_to_latent.items() ])
