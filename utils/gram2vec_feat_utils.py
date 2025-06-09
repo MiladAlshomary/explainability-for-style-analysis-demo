@@ -3,8 +3,7 @@ import html
 
 from collections import namedtuple
 from gram2vec.feature_locator import find_feature_spans
-from gram2vec import vectorizer
-from gradio import update
+from functools import lru_cache
 
 from utils.llm_feat_utils import generate_feature_spans_cached
 
@@ -12,80 +11,48 @@ Span = namedtuple('Span', ['start_char', 'end_char'])
 
 from gram2vec import vectorizer
 
+# ── the FEATURE_HANDLERS & loader  ────────────
 FEATURE_HANDLERS = {
-    "pos_unigrams":    "Part-of-Speech Unigram",
-    "pos_bigrams":     "Part-of-Speech Bigram",
-    "func_words":      "Function Word",
-    "punctuation":     "Punctuation",
-    "letters":         "Letter",
-    "dep_labels":      "Dependency Label",
-    "morph_tags":      "Morphological Tag",
-    "sentences":       "Sentence Type",
-    "emojis":          "Emoji"
+    "Part-of-Speech Unigram": "pos_unigrams",
+    "Part-of-Speech Bigram":  "pos_bigrams",
+    "Function Word":          "func_words",
+    "Punctuation":            "punctuation",
+    "Letter":                 "letters",
+    "Dependency Label":       "dep_labels",
+    "Morphology Tag":      "morph_tags",
+    "Sentence Type":          "sentences",
+    "Emoji":                  "emojis"
 }
 
-feature_choices = {} 
-
-def load_human_readable_mapping(path="utils/human_readable.txt") -> dict[str,str]:
-    """
-    Reads lines like "ADJ: Adjective" and returns {"ADJ":"Adjective", ...}
-    """
-    mapping = {}
-    with open(path, encoding="utf-8") as f:
+@lru_cache(maxsize=1)
+def load_code_map(txt_path: str = "utils/augmented_human_readable.txt") -> dict:
+    code_map = {}
+    with open(txt_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line or ':' not in line:
+            if not line:
                 continue
-            key, val = line.split(":", 1)
-            mapping[key.lower().strip()] = val.strip()
-    return mapping
+            human, code = [p.strip() for p in line.split(":", 1)]
+            code_map[human] = code
+    return code_map
 
-def human_readable_feature_choices(
-    features: list[str],
-    mapping_file: str = "utils/human_readable.txt"
-) -> list[dict]:
+def get_shorthand(feature_str: str) -> str:
     """
-    Given a list of Gram2Vec feature keys (e.g. "pos_unigrams:AUX"),
-    returns a list of {"label":..., "value":...} dicts for gr.Radio.
-    Label includes both the group name and the code’s human text:
-      "Part-of-Speech Unigram: Auxiliary verb" for "pos_unigrams:AUX"
+    Expects 'Category:Human-Readable', returns e.g. 'pos_unigrams:ADJ' or None.
     """
-    hr_map = load_human_readable_mapping(mapping_file)
-    for feat in features:
-        if ":" not in feat:
-            continue
-        handler, code = feat.split(":", 1)
-        code = code.lower()
-        group_name = FEATURE_HANDLERS.get(handler, handler)
-        code_name  = hr_map.get(code, code)
-        label = f"{group_name}: {code_name}"
-        feature_choices[label]=feat
-    return feature_choices
-
-def get_top_gram2vec_features(iid: int, instances: list, top_n: int = 10) -> list[str]:
-    """
-    Vectorize the mystery text with *all* Gram2Vec features turned on,
-    then return the top_n non-zero features sorted by value.
-    """
-    iid = int(iid)
-    text = instances[iid]["Q_fullText"]
-    # by default, from_documents() turns on every registered feature
-    df = vectorizer.from_documents([text])
-    row = df.iloc[0]
-    # pick only those with a positive value, remove those which dont have a feature handler, sort descending, take top_n
-    nonzero = row[row > 0]
-    filtered = nonzero[[feat for feat in nonzero.index
-                        if feat.split(":", 1)[0] in FEATURE_HANDLERS.keys()]]
-    top_feats = (
-        filtered
-           .sort_values(ascending=False)
-           .head(top_n)
-           .index
-           .tolist()
-    )
-    top_feats = human_readable_feature_choices(top_feats, mapping_file="utils/human_readable.txt")
-    keys = list(top_feats.keys())
-    return update(choices=keys, value=keys[0]), top_feats
+    try:
+        category, human = [p.strip() for p in feature_str.split(":", 1)]
+        print(f"Category: {category}, Human: {human}")
+    except ValueError:
+        print("Invalid format for feature string:", feature_str)
+        return None
+    if category not in FEATURE_HANDLERS:
+        return None
+    code = load_code_map().get(human)
+    if code is None:
+        print(f"Warning: No code found for human-readable feature '{human}'")
+        return None  # fallback to the human-readable name
+    return f"{FEATURE_HANDLERS[category]}:{code}"
 
 
 def highlight_both_spans(text, llm_spans, gram_spans):
@@ -150,45 +117,77 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
     ]
 
     # get llm spans map (list of spans objects) for each text
-    llm_maps = [
-      generate_feature_spans_cached(client, f"{iid}", texts[0][1], features_list, role="mystery"),
-      generate_feature_spans_cached(client, f"{iid}_cand0",   texts[1][1], features_list, role="candidate"),
-      generate_feature_spans_cached(client, f"{iid}_cand1",   texts[2][1], features_list, role="candidate"),
-      generate_feature_spans_cached(client, f"{iid}_cand2",   texts[3][1], features_list, role="candidate"),
-    ]
-    # get span indexes for each text
-    llm_spans_list = [
-        [
-            # positional: first arg → start_char, second → end_char
-            Span(txt.find(s), txt.find(s) + len(s))
-            for s in llm_maps[i].get(selected_feature_llm, [])
-            if s in txt
+    if selected_feature_llm and selected_feature_llm != "None":
+        llm_maps = [
+        generate_feature_spans_cached(client, f"{iid}", texts[0][1], features_list, role="mystery"),
+        generate_feature_spans_cached(client, f"{iid}_cand0",   texts[1][1], features_list, role="candidate"),
+        generate_feature_spans_cached(client, f"{iid}_cand1",   texts[2][1], features_list, role="candidate"),
+        generate_feature_spans_cached(client, f"{iid}_cand2",   texts[3][1], features_list, role="candidate"),
         ]
-        for i, (_, txt) in enumerate(texts)
-    ]
+        # get span indexes for each text
+        llm_spans_list = [
+            [
+                # positional: first arg → start_char, second → end_char
+                Span(txt.find(s), txt.find(s) + len(s))
+                for s in llm_maps[i].get(selected_feature_llm, [])
+                if s in txt
+            ]
+            for i, (_, txt) in enumerate(texts)
+        ]
+    else:
+        print("Skipping LLM span extraction: feature is None")
+        llm_spans_list = [[] for _ in texts]
 
-    # get gram2vec spans
-    gram_spans_list = []
-    for role, txt in texts:
-        try:
-            print(f"Finding spans for {feature_choices[selected_feature_g2v]} {role}")
-            spans = find_feature_spans(txt, feature_choices[selected_feature_g2v])
-        except:
-            spans = []
-        gram_spans_list.append(spans)
+    if selected_feature_g2v and selected_feature_g2v != "None":
+        # get gram2vec spans
+        gram_spans_list = []
+        # key, _ = selected_feature_g2v.split(":", 1)
+        # sel_g2v_short = FEATURE_HANDLERS.get(key, key)
+        print(f"Selected Gram2Vec feature: {selected_feature_g2v}")
+        short = get_shorthand(selected_feature_g2v)
+        print(f"short hand: {short}")
+        for role, txt in texts:
+            try:
+                print(f"Finding spans for {short} {role}")
+                spans = find_feature_spans(txt, short)
+                # spans = [Span(fs.start_char, fs.end_char) for fs in raw_spans]
+            except:
+                spans = []
+            gram_spans_list.append(spans)
+    else:
+        print("Skipping Gram2Vec span extraction: feature is None")
+        gram_spans_list = [[] for _ in texts]
 
     # build HTML blocks
     html = []
     for i, (label, txt) in enumerate(texts):
         combined = highlight_both_spans(txt, llm_spans_list[i], gram_spans_list[i])
         notice = ""
-        if not llm_spans_list[i]:
+        if selected_feature_llm == "None":
+            notice += f"""
+            <div style="padding:8px; background:#eee; border:1px solid #aaa;">
+              <em>No LLM feature selected.</em>
+            </div>
+            """
+        elif not llm_spans_list[i]:
             notice += f"""
             <div style="padding:8px; background:#fee; border:1px solid #f00;">
               <em>No spans found for LLM feature "{selected_feature_llm}".</em>
             </div>
             """
-        if not gram_spans_list[i]:
+        if selected_feature_g2v == "None":
+            notice += f"""
+            <div style="padding:8px; background:#eee; border:1px solid #aaa;">
+              <em>No Gram2Vec feature selected.</em>
+            </div>
+            """
+        elif not short:
+            notice += f"""
+            <div style="padding:8px; background:#fee; border:1px solid #f00;">
+              <em>Invalid or unmapped feature: "{selected_feature_g2v}".</em>
+            </div>
+            """
+        elif not gram_spans_list[i]:
             notice += f"""
             <div style="padding:8px; background:#fee; border:1px solid #f00;">
               <em>No spans found for Gram2Vec feature "{selected_feature_g2v}".</em>
@@ -203,3 +202,4 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
         """)
 
     return "<div>" + "\n<hr>\n".join(html) + "</div>"
+

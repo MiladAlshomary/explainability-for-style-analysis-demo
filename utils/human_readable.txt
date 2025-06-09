@@ -1,5 +1,5 @@
 ADJ: Adjective
-ADP: Adposition (preposition or postposition)
+ADP: Adposition
 ADV: Adverb
 AUX: Auxiliary verb
 CCONJ: Coordinating conjunction
@@ -14,7 +14,7 @@ PUNCT: Punctuation
 SCONJ: Subordinating conjunction
 SYM: Symbol
 VERB: Verb
-X: Other (foreign words, typos, abbreviations)
+X: Other
 SPACE: Space
 
 Aspect=Perf: Perfect aspect

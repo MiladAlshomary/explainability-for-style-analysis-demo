@@ -1,9 +1,15 @@
 import json
 import os
-from utils.visualizations import clean_text
+import re
 
 CACHE_DIR = "datasets/feature_spans_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
+import pandas as pd
+
+#read and create the Gram2Vec feature set once
+_g2v_df      = pd.read_csv("datasets/gram2vec_feats.csv")
+GRAM2VEC_SET = set(_g2v_df['gram2vec_feats'].unique())
+
 
 def generate_feature_spans(client, text: str, features: list[str]) -> str:
     print("Calling OpenAI to extract spans")
@@ -53,3 +59,15 @@ def generate_feature_spans_cached(client, instance_id: str, text: str, features:
         with open(cache_path, "w") as f:
             json.dump(mapping, f, indent=2)
         return mapping
+
+
+def split_features(all_feats):
+    """
+    Given a list of mixed features, returns two lists:
+    - llm_feats: those NOT in the Gram2Vec CSV
+    - g2v_feats: those present in the CSV
+    """
+    g2v_feats = [feat for feat in all_feats if feat in GRAM2VEC_SET]
+    llm_feats = [feat for feat in all_feats if feat not in GRAM2VEC_SET]
+    return llm_feats, g2v_feats
+

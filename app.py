@@ -21,11 +21,9 @@ cfg = load_config()
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def visualize_and_get_g2v(iid, cfg, instances):
-    plot_obj, cluster_feats, cluster_state = visualize_clusters_plotly(iid, cfg, instances)
-    #compute top-10 gram2vec for this mystery text
-    top_g2v_rb, top_g2v_list = get_top_gram2vec_features(iid, instances, top_n=10)
-    return plot_obj, cluster_feats, cluster_state, top_g2v_rb, top_g2v_list
+
+# ── load once at startup ────────────────────────────────────────
+GRAM2VEC_SHORTHAND = load_code_map()  
 
 def app(share=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
@@ -103,6 +101,8 @@ def app(share=False):
 
 
         # ── Dropdown and to select instance ─────────────────────────────
+        # Load default instance values for display
+        default_outputs = load_instance(0, instances)
         gr.HTML("""
                     <div style="
                         font-size: 1.3em;
@@ -113,7 +113,7 @@ def app(share=False):
                     </div>
                     """)
 
-        dropdown = gr.Dropdown(
+        task_dropdown = gr.Dropdown(
             choices=[f"Task {i}" for i in instance_ids],
             value=f"Task {instance_ids[0]}",
             label="Choose which mystery document to explain",
@@ -121,14 +121,14 @@ def app(share=False):
 
 
         # ── HTML outputs for author texts… ─────────────────────────────
-        header  = gr.HTML()
-        mystery = gr.HTML()
+        header  = gr.HTML(value=default_outputs[0])
+        mystery = gr.HTML(value=default_outputs[1])
         with gr.Row():
-            c0, c1, c2 = gr.HTML(), gr.HTML(), gr.HTML()
+            c0, c1, c2 = gr.HTML(value=default_outputs[2]), gr.HTML(value=default_outputs[3]), gr.HTML(value=default_outputs[4])
 
-        dropdown.change(
+        task_dropdown.change(
             lambda iid: load_instance(int(iid.replace('Task ','')), instances),
-            inputs=dropdown,
+            inputs=task_dropdown,
             outputs=[header, mystery, c0, c1, c2]
         )    
 
@@ -155,6 +155,11 @@ def app(share=False):
                 """
                 gr.HTML(styled_html(expl_html))
         
+        # ── Dynamic Cluster Choice dropdown ──────────────────────────────────
+        gr.HTML(instruction_callout("Choose a cluster from the dropdown below to inspect whether its features appear in the mystery author’s text."))
+        cluster_dropdown = gr.Dropdown(choices=[], label="Select Cluster to Inspect")
+        style_map_state = gr.State()  # Holds the mapping of cluster->features
+        
         with gr.Row():
             # ── LLM Features Column ──────────────────────────────────
             with gr.Column(scale=1, min_width=0):
@@ -165,7 +170,7 @@ def app(share=False):
                         font-weight: 600;
                         margin-bottom: 0.5em;
                     ">
-                        Features from the cluster closest to the Mystery Author
+                        LLM-derived style  features prominent in the selected cluster
                     </div>
                     """)
                 features_rb = gr.Radio(choices=[], label="LLM-derived style features for this cluster")#, label="Features from the cluster closest to the Mystery Author", info="LLM-derived style features for this cluster")
@@ -180,28 +185,93 @@ def app(share=False):
                         font-weight: 600;
                         margin-bottom: 0.5em;
                     ">
-                        Top-10 Gram2Vec Features most likely to occur in Mystery Author
+                        Gram2Vec Features prominent in the selected cluster
                     </div>
                     """)
-                gram2vec_rb    = gr.Radio(choices=[], label="Most prominent Gram2Vec features in the mystery text")#, label="Top-10 Gram2Vec Features most likely to occur in Mystery Author", info="Most prominent Gram2Vec features in the mystery text")
+                gram2vec_rb    = gr.Radio(choices=[], label="Gram2Vec features for this cluster")#, label="Top-10 Gram2Vec Features most likely to occur in Mystery Author", info="Most prominent Gram2Vec features in the mystery text")
                 gram2vec_state = gr.State()
 
+        # ── Visualization button click ───────────────────────────────
         run_btn.click(
-            fn=lambda iid: visualize_and_get_g2v(
+            fn=lambda iid: visualize_clusters_plotly(
                 int(iid.replace('Task ','')), cfg, instances
             ),
-            inputs=[dropdown],
-            outputs=[
-                plot_out,         
-                features_rb,      
-                feature_list_state,
-                gram2vec_rb,      
-                gram2vec_state    
-            ]
+            inputs=[task_dropdown],
+            outputs=[plot_out, cluster_dropdown, style_map_state]
         )
 
+        # When a cluster is selected, split features and populate radio buttons
+        def on_cluster_change(selected_cluster, style_map):
+            cluster_key = extract_cluster_key(selected_cluster)
+            all_feats = style_map[cluster_key]
+            llm_feats, g2v_feats = split_features(all_feats)
+
+            # Add "None" as a default selectable option
+            llm_feats = ["None"] + llm_feats
+
+            # filter out any g2v feature without a shorthand
+            filtered_g2v = []
+            for feat in g2v_feats:
+                if get_shorthand(feat) is None:
+                    print(f"Skipping Gram2Vec feature without shorthand: {feat}")
+                else:
+                    filtered_g2v.append(feat)
+            
+            # Add "None" as a default selectable option
+            filtered_g2v = ["None"] + filtered_g2v
+
+            return (
+                gr.update(choices=llm_feats, value=llm_feats[0]),
+                gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
+            )
+
+        cluster_dropdown.change(
+            fn=on_cluster_change,
+            inputs=[cluster_dropdown, style_map_state],
+            outputs=[features_rb, gram2vec_rb]
+        )
+
+
         # ── Show combined feature‐span highlights ──
-        gr.HTML(instruction_callout("Click \"Show Combined Spans\" to highlight the LLM (yellow) & Gram2Vec (blue) feature spans in the texts"))
+        # combined callout + legend in one HTML block
+        gr.HTML(
+            instruction_callout(
+                "Click \"Show Combined Spans\" to highlight the LLM (yellow) & Gram2Vec (blue) feature spans in the texts"
+            )
+            + """
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 2em;
+                margin-top: 0.5em;
+                font-size: 0.9em;
+            ">
+            <div style="display: flex; align-items: center; gap: 0.5em; font-weight: 600; font-size: 1.5em;">
+                <span style="
+                    display: inline-block;
+                    width: 1.5em; height: 1.5em;
+                    background: #FFEB3B;      /* bright yellow */
+                    border: 1px solid #666;
+                    vertical-align: middle;
+                "></span>
+                LLM feature
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5em; font-weight: 600; font-size: 1.5em;">
+                <span style="
+                    display: inline-block;
+                    width: 1.5em; height: 1.5em;
+                    background: #5CB3FF;      /* clearer blue */
+                    border: 1px solid #666;
+                    vertical-align: middle;
+                "></span>
+                Gram2Vec feature
+            </div>
+            </div>
+            """
+        )
+
+
         combined_btn  = gr.Button("Show Combined Spans")
         combined_html = gr.HTML()
 
@@ -209,7 +279,7 @@ def app(share=False):
             fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v: show_combined_spans_all(
                 client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v
             ),
-            inputs=[dropdown, features_rb, feature_list_state, gram2vec_rb],
+            inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb],
             outputs=[combined_html]
         )
 
