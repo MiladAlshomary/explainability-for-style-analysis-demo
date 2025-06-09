@@ -25,13 +25,6 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # ── load once at startup ────────────────────────────────────────
 GRAM2VEC_SHORTHAND = load_code_map()  
 
-
-# def visualize_and_get_g2v(iid, cfg, instances):
-#     plot_obj, cluster_feats, cluster_state = visualize_clusters_plotly(iid, cfg, instances)
-#     #compute top-10 gram2vec for this mystery text
-#     top_g2v_rb, top_g2v_list = get_top_gram2vec_features(iid, instances, top_n=10)
-#     return plot_obj, cluster_feats, cluster_state, top_g2v_rb, top_g2v_list
-
 def app(share=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
@@ -108,6 +101,8 @@ def app(share=False):
 
 
         # ── Dropdown and to select instance ─────────────────────────────
+        # Load default instance values for display
+        default_outputs = load_instance(0, instances)
         gr.HTML("""
                     <div style="
                         font-size: 1.3em;
@@ -126,10 +121,10 @@ def app(share=False):
 
 
         # ── HTML outputs for author texts… ─────────────────────────────
-        header  = gr.HTML()
-        mystery = gr.HTML()
+        header  = gr.HTML(value=default_outputs[0])
+        mystery = gr.HTML(value=default_outputs[1])
         with gr.Row():
-            c0, c1, c2 = gr.HTML(), gr.HTML(), gr.HTML()
+            c0, c1, c2 = gr.HTML(value=default_outputs[2]), gr.HTML(value=default_outputs[3]), gr.HTML(value=default_outputs[4])
 
         task_dropdown.change(
             lambda iid: load_instance(int(iid.replace('Task ','')), instances),
@@ -211,23 +206,23 @@ def app(share=False):
             all_feats = style_map[cluster_key]
             llm_feats, g2v_feats = split_features(all_feats)
 
+            # Add "None" as a default selectable option
+            llm_feats = ["None"] + llm_feats
+
             # filter out any g2v feature without a shorthand
-            # filtered_g2v = [
-            #     feat for feat in g2v_feats
-            #     if get_shorthand(feat) is not None
-            # ]
             filtered_g2v = []
             for feat in g2v_feats:
                 if get_shorthand(feat) is None:
                     print(f"Skipping Gram2Vec feature without shorthand: {feat}")
                 else:
                     filtered_g2v.append(feat)
+            
+            # Add "None" as a default selectable option
+            filtered_g2v = ["None"] + filtered_g2v
 
             return (
-                gr.update(choices=llm_feats,
-                        value=llm_feats[0] if llm_feats else None),
-                gr.update(choices=filtered_g2v,
-                        value=filtered_g2v[0] if filtered_g2v else None),
+                gr.update(choices=llm_feats, value=llm_feats[0]),
+                gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
             )
 
         cluster_dropdown.change(

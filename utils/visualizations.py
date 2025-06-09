@@ -9,6 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
+import re
 
 def clean_text(text: str) -> str:
     """
@@ -75,7 +76,7 @@ def load_instance(instance_id, instances_to_explain: dict):
                 title += " (True Author)"
                 extra_style = (
                     "border: 2px solid #ff5722; "
-                    "background: #fff3e0; "
+                    "background: #fff3e0; " 
                     "padding:10px; "
                 )
 
@@ -90,6 +91,7 @@ def load_instance(instance_id, instances_to_explain: dict):
                 "background-color: #e6ffe6; "       # light green fill
                 "padding:10px; "
             )
+            
 
         candidate_htmls.append(f"""
         <div style="border:1px solid #ccc; padding:10px; {extra_style}">
@@ -189,6 +191,7 @@ def visualize_clusters_plotly(iid, cfg, instances):
     q_lat        = np.array(inst['author_latents'][:1])
     c_lat        = np.array(inst['author_latents'][1:])
     pred_idx     = inst['latent_rank'][0]
+    gt_idx       = inst['gt_idx']
 
     cent_emb = np.array([v for _,v in dim2lat.items()])
     cent_lbl = np.array([k for k,_ in dim2lat.items()])
@@ -206,9 +209,14 @@ def visualize_clusters_plotly(iid, cfg, instances):
     # find nearest centroid
     dists = np.linalg.norm(cent_proj - q_proj, axis=1)
     idx   = int(np.argmin(dists))
-    cluster_label = cent_lbl[idx]
+    cluster_label_query = cent_lbl[idx]
     # features of the nearest centroid to display
-    feature_list = style_names[cluster_label]
+    feature_list = style_names[cluster_label_query]
+
+    cluster_labels_per_candidate = [
+        cent_lbl[int(np.argmin(np.linalg.norm(cent_proj - c_proj[i], axis=1)))]
+        for i in range(c_proj.shape[0])
+    ]
 
     # prepare colorscale
     n_cent = len(cent_lbl)
@@ -257,7 +265,19 @@ def visualize_clusters_plotly(iid, cfg, instances):
     # three candidates
     marker_syms = ['diamond','pentagon','x']
     for i in range(3):
-        label = f"Candidate {i+1}" + (" (predicted)" if i==pred_idx else "")
+        # label = f"Candidate {i+1}" + (" (predicted)" if i==pred_idx else "")
+        base = f"Candidate {i+1}"
+        # pick the right suffix
+        if i == pred_idx and i == gt_idx:
+            suffix = " (Predicted & Ground Truth)"
+        elif i == pred_idx:
+            suffix = " (Predicted)"
+        elif i == gt_idx:
+            suffix = "(Ground Truth)"
+        else:
+            suffix = ""
+
+        label = base + suffix
         fig.add_trace(go.Scattergl(
             x=[c_proj[i,0]], y=[c_proj[i,1]],
             mode='markers',
@@ -293,10 +313,20 @@ def visualize_clusters_plotly(iid, cfg, instances):
     # Candidate authors (dark blue ◆)
     offsets = [(-40, -30), (40, -30), (0, 40)]  # [(ax,ay) for Cand1, Cand2, Cand3]
     for i in range(3):
+        # build the right label
+        if i == pred_idx and i == gt_idx:
+            label = f"Candidate {i+1} (Predicted & Ground Truth)"
+        elif i == pred_idx:
+            label = f"Candidate {i+1} (Predicted)"
+        elif i == gt_idx:
+            label = f"Candidate {i+1} (Ground Truth)"
+        else:
+            label = f"Candidate {i+1}"
+
         fig.add_annotation(
             x=c_proj[i,0], y=c_proj[i,1],
             xref='x', yref='y',
-            text= f"Candidate {i+1}" + (" (Predicted)" if i == pred_idx else ""),
+            text= label,
             showarrow=True,
             arrowhead=2,
             arrowsize=1,
@@ -306,5 +336,40 @@ def visualize_clusters_plotly(iid, cfg, instances):
             font=dict(color='darkblue', size=12)
         )
 
-    # returning the figure, the radio button choices and the complete feature list
-    return fig, update(choices=feature_list, value=feature_list[0]),feature_list
+    # Prepare outputs for the new cluster‐dropdown UI
+    # all_clusters = sorted(style_names.keys())
+    # --- build display names for the dropdown ---
+    sorted_labels = sorted([int(lbl) for lbl in cent_lbl])
+    display_clusters = []
+    for lbl in sorted_labels:
+        name = f"Cluster {lbl}"
+        if lbl == cluster_label_query:
+            name += " (closest to mystery author)"
+        matching_indices = [i + 1 for i, val in enumerate(cluster_labels_per_candidate) if int(val) == lbl]
+        if matching_indices:
+            if len(matching_indices) == 1:
+                name += f" (closest to Candidate {matching_indices[0]} author)"
+            else:
+                candidate_str = ", ".join(f"Candidate {i}" for i in matching_indices)
+                name += f" (closest to {candidate_str} authors)"
+        display_clusters.append(name)
+    # print(f"All clusters: {all_clusters}")
+    # return: figure, dropdown payload, full style_map
+    return (
+      fig,
+      update(choices=display_clusters, value=display_clusters[cluster_label_query]),
+      style_names
+    )
+    # return fig, update(choices=feature_list, value=feature_list[0]),feature_list
+
+
+def extract_cluster_key(display_label: str) -> int:
+    """
+    Given a dropdown label like
+      "Cluster 5 (closest to mystery author; closest to Candidate 1 author)"
+    returns the integer 5.
+    """
+    m = re.match(r"Cluster\s+(\d+)", display_label)
+    if not m:
+        raise ValueError(f"Unrecognized cluster label: {display_label}")
+    return int(m.group(1))

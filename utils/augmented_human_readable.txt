@@ -1,0 +1,354 @@
+Adjective:ADJ
+Adposition:ADP
+Adverb:ADV
+Auxiliary verb:AUX
+Coordinating conjunction:CCONJ
+Determiner:DET
+Interjection:INTJ
+Noun:NOUN
+Numeral:NUM
+Particle:PART
+Pronoun:PRON
+Proper noun:PROPN
+Punctuation:PUNCT
+Subordinating conjunction:SCONJ
+Symbol:SYM
+Verb:VERB
+Other:X
+Space:SPACE
+Other (foreign words, typos, abbreviations):X
+ADP: Adposition (preposition or postposition)
+
+Perfect aspect:Aspect=Perf
+Progressive aspect:Aspect=Prog
+Accusative case:Case=Acc
+Nominative case:Case=Nom
+Definite article:Definite=Def
+Indefinite article:Definite=Ind
+Comparative degree:Degree=Cmp
+Positive degree:Degree=Pos
+Superlative degree:Degree=Sup
+Feminine gender:Gender=Fem
+Masculine gender:Gender=Masc
+Indicative mood:Mood=Ind
+Plural number:Number=Plur
+Singular number:Number=Sing
+First person:Person=1
+Second person:Person=2
+Third person:Person=3
+Past tense:Tense=Past
+Present tense:Tense=Pres
+Finite verb form:VerbForm=Fin
+Infinitive verb form:VerbForm=Inf
+
+Adjective followed by Adjective:ADJ ADJ
+Adjective followed by Adposition:ADJ ADP
+Adjective followed by Adverb:ADJ ADV
+Adjective followed by Auxiliary verb:ADJ AUX
+Adjective followed by Coordinating conjunction:ADJ CCONJ
+Adjective followed by Determiner:ADJ DET
+Adjective followed by Interjection:ADJ INTJ
+Adjective followed by Noun:ADJ NOUN
+Adjective followed by Numeral:ADJ NUM
+Adjective followed by Other:ADJ X
+Adjective followed by Particle:ADJ PART
+Adjective followed by Pronoun:ADJ PRON
+Adjective followed by Proper noun:ADJ PROPN
+Adjective followed by Punctuation:ADJ PUNCT
+Adjective followed by Subordinating conjunction:ADJ SCONJ
+Adjective followed by Symbol:ADJ SYM
+Adjective followed by Verb:ADJ VERB
+Adposition followed by Adjective:ADP ADJ
+Adposition followed by Adposition:ADP ADP
+Adposition followed by Adverb:ADP ADV
+Adposition followed by Auxiliary verb:ADP AUX
+Adposition followed by Coordinating conjunction:ADP CCONJ
+Adposition followed by Determiner:ADP DET
+Adposition followed by Interjection:ADP INTJ
+Adposition followed by Noun:ADP NOUN
+Adposition followed by Numeral:ADP NUM
+Adposition followed by Other:ADP X
+Adposition followed by Particle:ADP PART
+Adposition followed by Pronoun:ADP PRON
+Adposition followed by Proper noun:ADP PROPN
+Adposition followed by Punctuation:ADP PUNCT
+Adposition followed by Subordinating conjunction:ADP SCONJ
+Adposition followed by Symbol:ADP SYM
+Adposition followed by Verb:ADP VERB
+Adverb followed by Adjective:ADV ADJ
+Adverb followed by Adposition:ADV ADP
+Adverb followed by Adverb:ADV ADV
+Adverb followed by Auxiliary verb:ADV AUX
+Adverb followed by Coordinating conjunction:ADV CCONJ
+Adverb followed by Determiner:ADV DET
+Adverb followed by Interjection:ADV INTJ
+Adverb followed by Noun:ADV NOUN
+Adverb followed by Numeral:ADV NUM
+Adverb followed by Other:ADV X
+Adverb followed by Particle:ADV PART
+Adverb followed by Pronoun:ADV PRON
+Adverb followed by Proper noun:ADV PROPN
+Adverb followed by Punctuation:ADV PUNCT
+Adverb followed by Subordinating conjunction:ADV SCONJ
+Adverb followed by Symbol:ADV SYM
+Adverb followed by Verb:ADV VERB
+Auxiliary verb followed by Adjective:AUX ADJ
+Auxiliary verb followed by Adposition:AUX ADP
+Auxiliary verb followed by Adverb:AUX ADV
+Auxiliary verb followed by Auxiliary verb:AUX AUX
+Auxiliary verb followed by Coordinating conjunction:AUX CCONJ
+Auxiliary verb followed by Determiner:AUX DET
+Auxiliary verb followed by Interjection:AUX INTJ
+Auxiliary verb followed by Noun:AUX NOUN
+Auxiliary verb followed by Numeral:AUX NUM
+Auxiliary verb followed by Other:AUX X
+Auxiliary verb followed by Particle:AUX PART
+Auxiliary verb followed by Pronoun:AUX PRON
+Auxiliary verb followed by Proper noun:AUX PROPN
+Auxiliary verb followed by Punctuation:AUX PUNCT
+Auxiliary verb followed by Subordinating conjunction:AUX SCONJ
+Auxiliary verb followed by Symbol:AUX SYM
+Auxiliary verb followed by Verb:AUX VERB
+Coordinating conjunction followed by Adjective:CCONJ ADJ
+Coordinating conjunction followed by Adposition:CCONJ ADP
+Coordinating conjunction followed by Adverb:CCONJ ADV
+Coordinating conjunction followed by Auxiliary verb:CCONJ AUX
+Coordinating conjunction followed by Coordinating conjunction:CCONJ CCONJ
+Coordinating conjunction followed by Determiner:CCONJ DET
+Coordinating conjunction followed by Interjection:CCONJ INTJ
+Coordinating conjunction followed by Noun:CCONJ NOUN
+Coordinating conjunction followed by Numeral:CCONJ NUM
+Coordinating conjunction followed by Other:CCONJ X
+Coordinating conjunction followed by Particle:CCONJ PART
+Coordinating conjunction followed by Pronoun:CCONJ PRON
+Coordinating conjunction followed by Proper noun:CCONJ PROPN
+Coordinating conjunction followed by Punctuation:CCONJ PUNCT
+Coordinating conjunction followed by Subordinating conjunction:CCONJ SCONJ
+Coordinating conjunction followed by Symbol:CCONJ SYM
+Coordinating conjunction followed by Verb:CCONJ VERB
+Determiner followed by Adjective:DET ADJ
+Determiner followed by Adposition:DET ADP
+Determiner followed by Adverb:DET ADV
+Determiner followed by Auxiliary verb:DET AUX
+Determiner followed by Coordinating conjunction:DET CCONJ
+Determiner followed by Determiner:DET DET
+Determiner followed by Interjection:DET INTJ
+Determiner followed by Noun:DET NOUN
+Determiner followed by Numeral:DET NUM
+Determiner followed by Other:DET X
+Determiner followed by Particle:DET PART
+Determiner followed by Pronoun:DET PRON
+Determiner followed by Proper noun:DET PROPN
+Determiner followed by Punctuation:DET PUNCT
+Determiner followed by Subordinating conjunction:DET SCONJ
+Determiner followed by Symbol:DET SYM
+Determiner followed by Verb:DET VERB
+Interjection followed by Adjective:INTJ ADJ
+Interjection followed by Adposition:INTJ ADP
+Interjection followed by Adverb:INTJ ADV
+Interjection followed by Auxiliary verb:INTJ AUX
+Interjection followed by Coordinating conjunction:INTJ CCONJ
+Interjection followed by Determiner:INTJ DET
+Interjection followed by Interjection:INTJ INTJ
+Interjection followed by Noun:INTJ NOUN
+Interjection followed by Numeral:INTJ NUM
+Interjection followed by Other:INTJ X
+Interjection followed by Particle:INTJ PART
+Interjection followed by Pronoun:INTJ PRON
+Interjection followed by Proper noun:INTJ PROPN
+Interjection followed by Punctuation:INTJ PUNCT
+Interjection followed by Subordinating conjunction:INTJ SCONJ
+Interjection followed by Symbol:INTJ SYM
+Interjection followed by Verb:INTJ VERB
+Noun followed by Adjective:NOUN ADJ
+Noun followed by Adposition:NOUN ADP
+Noun followed by Adverb:NOUN ADV
+Noun followed by Auxiliary verb:NOUN AUX
+Noun followed by Coordinating conjunction:NOUN CCONJ
+Noun followed by Determiner:NOUN DET
+Noun followed by Interjection:NOUN INTJ
+Noun followed by Noun:NOUN NOUN
+Noun followed by Numeral:NOUN NUM
+Noun followed by Other:NOUN X
+Noun followed by Particle:NOUN PART
+Noun followed by Pronoun:NOUN PRON
+Noun followed by Proper noun:NOUN PROPN
+Noun followed by Punctuation:NOUN PUNCT
+Noun followed by Subordinating conjunction:NOUN SCONJ
+Noun followed by Symbol:NOUN SYM
+Noun followed by Verb:NOUN VERB
+Numeral followed by Adjective:NUM ADJ
+Numeral followed by Adposition:NUM ADP
+Numeral followed by Adverb:NUM ADV
+Numeral followed by Auxiliary verb:NUM AUX
+Numeral followed by Coordinating conjunction:NUM CCONJ
+Numeral followed by Determiner:NUM DET
+Numeral followed by Interjection:NUM INTJ
+Numeral followed by Noun:NUM NOUN
+Numeral followed by Numeral:NUM NUM
+Numeral followed by Other:NUM X
+Numeral followed by Particle:NUM PART
+Numeral followed by Pronoun:NUM PRON
+Numeral followed by Proper noun:NUM PROPN
+Numeral followed by Punctuation:NUM PUNCT
+Numeral followed by Subordinating conjunction:NUM SCONJ
+Numeral followed by Symbol:NUM SYM
+Numeral followed by Verb:NUM VERB
+Other followed by Adjective:X ADJ
+Other followed by Adposition:X ADP
+Other followed by Adverb:X ADV
+Other followed by Auxiliary verb:X AUX
+Other followed by Coordinating conjunction:X CCONJ
+Other followed by Determiner:X DET
+Other followed by Interjection:X INTJ
+Other followed by Noun:X NOUN
+Other followed by Numeral:X NUM
+Other followed by Other:X X
+Other followed by Particle:X PART
+Other followed by Pronoun:X PRON
+Other followed by Proper noun:X PROPN
+Other followed by Punctuation:X PUNCT
+Other followed by Subordinating conjunction:X SCONJ
+Other followed by Symbol:X SYM
+Other followed by Verb:X VERB
+Particle followed by Adjective:PART ADJ
+Particle followed by Adposition:PART ADP
+Particle followed by Adverb:PART ADV
+Particle followed by Auxiliary verb:PART AUX
+Particle followed by Coordinating conjunction:PART CCONJ
+Particle followed by Determiner:PART DET
+Particle followed by Interjection:PART INTJ
+Particle followed by Noun:PART NOUN
+Particle followed by Numeral:PART NUM
+Particle followed by Other:PART X
+Particle followed by Particle:PART PART
+Particle followed by Pronoun:PART PRON
+Particle followed by Proper noun:PART PROPN
+Particle followed by Punctuation:PART PUNCT
+Particle followed by Subordinating conjunction:PART SCONJ
+Particle followed by Symbol:PART SYM
+Particle followed by Verb:PART VERB
+Pronoun followed by Adjective:PRON ADJ
+Pronoun followed by Adposition:PRON ADP
+Pronoun followed by Adverb:PRON ADV
+Pronoun followed by Auxiliary verb:PRON AUX
+Pronoun followed by Coordinating conjunction:PRON CCONJ
+Pronoun followed by Determiner:PRON DET
+Pronoun followed by Interjection:PRON INTJ
+Pronoun followed by Noun:PRON NOUN
+Pronoun followed by Numeral:PRON NUM
+Pronoun followed by Other:PRON X
+Pronoun followed by Particle:PRON PART
+Pronoun followed by Pronoun:PRON PRON
+Pronoun followed by Proper noun:PRON PROPN
+Pronoun followed by Punctuation:PRON PUNCT
+Pronoun followed by Subordinating conjunction:PRON SCONJ
+Pronoun followed by Symbol:PRON SYM
+Pronoun followed by Verb:PRON VERB
+Proper noun followed by Adjective:PROPN ADJ
+Proper noun followed by Adposition:PROPN ADP
+Proper noun followed by Adverb:PROPN ADV
+Proper noun followed by Auxiliary verb:PROPN AUX
+Proper noun followed by Coordinating conjunction:PROPN CCONJ
+Proper noun followed by Determiner:PROPN DET
+Proper noun followed by Interjection:PROPN INTJ
+Proper noun followed by Noun:PROPN NOUN
+Proper noun followed by Numeral:PROPN NUM
+Proper noun followed by Other:PROPN X
+Proper noun followed by Particle:PROPN PART
+Proper noun followed by Pronoun:PROPN PRON
+Proper noun followed by Proper noun:PROPN PROPN
+Proper noun followed by Punctuation:PROPN PUNCT
+Proper noun followed by Subordinating conjunction:PROPN SCONJ
+Proper noun followed by Symbol:PROPN SYM
+Proper noun followed by Verb:PROPN VERB
+Punctuation followed by Adjective:PUNCT ADJ
+Punctuation followed by Adposition:PUNCT ADP
+Punctuation followed by Adverb:PUNCT ADV
+Punctuation followed by Auxiliary verb:PUNCT AUX
+Punctuation followed by Coordinating conjunction:PUNCT CCONJ
+Punctuation followed by Determiner:PUNCT DET
+Punctuation followed by Interjection:PUNCT INTJ
+Punctuation followed by Noun:PUNCT NOUN
+Punctuation followed by Numeral:PUNCT NUM
+Punctuation followed by Other:PUNCT X
+Punctuation followed by Particle:PUNCT PART
+Punctuation followed by Pronoun:PUNCT PRON
+Punctuation followed by Proper noun:PUNCT PROPN
+Punctuation followed by Punctuation:PUNCT PUNCT
+Punctuation followed by Subordinating conjunction:PUNCT SCONJ
+Punctuation followed by Symbol:PUNCT SYM
+Punctuation followed by Verb:PUNCT VERB
+Subordinating conjunction followed by Adjective:SCONJ ADJ
+Subordinating conjunction followed by Adposition:SCONJ ADP
+Subordinating conjunction followed by Adverb:SCONJ ADV
+Subordinating conjunction followed by Auxiliary verb:SCONJ AUX
+Subordinating conjunction followed by Coordinating conjunction:SCONJ CCONJ
+Subordinating conjunction followed by Determiner:SCONJ DET
+Subordinating conjunction followed by Interjection:SCONJ INTJ
+Subordinating conjunction followed by Noun:SCONJ NOUN
+Subordinating conjunction followed by Numeral:SCONJ NUM
+Subordinating conjunction followed by Other:SCONJ X
+Subordinating conjunction followed by Particle:SCONJ PART
+Subordinating conjunction followed by Pronoun:SCONJ PRON
+Subordinating conjunction followed by Proper noun:SCONJ PROPN
+Subordinating conjunction followed by Punctuation:SCONJ PUNCT
+Subordinating conjunction followed by Subordinating conjunction:SCONJ SCONJ
+Subordinating conjunction followed by Symbol:SCONJ SYM
+Subordinating conjunction followed by Verb:SCONJ VERB
+Symbol followed by Adjective:SYM ADJ
+Symbol followed by Adposition:SYM ADP
+Symbol followed by Adverb:SYM ADV
+Symbol followed by Auxiliary verb:SYM AUX
+Symbol followed by Coordinating conjunction:SYM CCONJ
+Symbol followed by Determiner:SYM DET
+Symbol followed by Interjection:SYM INTJ
+Symbol followed by Noun:SYM NOUN
+Symbol followed by Numeral:SYM NUM
+Symbol followed by Other:SYM X
+Symbol followed by Particle:SYM PART
+Symbol followed by Pronoun:SYM PRON
+Symbol followed by Proper noun:SYM PROPN
+Symbol followed by Punctuation:SYM PUNCT
+Symbol followed by Subordinating conjunction:SYM SCONJ
+Symbol followed by Symbol:SYM SYM
+Symbol followed by Verb:SYM VERB
+Verb followed by Adjective:VERB ADJ
+Verb followed by Adposition:VERB ADP
+Verb followed by Adverb:VERB ADV
+Verb followed by Auxiliary verb:VERB AUX
+Verb followed by Coordinating conjunction:VERB CCONJ
+Verb followed by Determiner:VERB DET
+Verb followed by Interjection:VERB INTJ
+Verb followed by Noun:VERB NOUN
+Verb followed by Numeral:VERB NUM
+Verb followed by Other:VERB X
+Verb followed by Particle:VERB PART
+Verb followed by Pronoun:VERB PRON
+Verb followed by Proper noun:VERB PROPN
+Verb followed by Punctuation:VERB PUNCT
+Verb followed by Subordinating conjunction:VERB SCONJ
+Verb followed by Symbol:VERB SYM
+Verb followed by Verb:VERB VERB
+
+Accusative case:Case=Acc
+Comparative degree:Degree=Cmp
+Definite article:Definite=Def
+Feminine gender:Gender=Fem
+Finite verb form:VerbForm=Fin
+First person:Person=1
+Indefinite article:Definite=Ind
+Indicative mood:Mood=Ind
+Infinitive verb form:VerbForm=Inf
+Masculine gender:Gender=Masc
+Nominative case:Case=Nom
+Past tense:Tense=Past
+Perfect aspect:Aspect=Perf
+Plural number:Number=Plur
+Positive degree:Degree=Pos
+Present tense:Tense=Pres
+Progressive aspect:Aspect=Prog
+Second person:Person=2
+Singular number:Number=Sing
+Superlative degree:Degree=Sup
+Third person:Person=3
