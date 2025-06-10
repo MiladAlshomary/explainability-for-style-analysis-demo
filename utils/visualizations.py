@@ -166,8 +166,12 @@ def load_interp_space(cfg):
         #print('only gra2vec feats')
         dimension_to_style = {dim[0]:[feat for feat in dim[1] if feat in gram2vec_feats] for dim in dimension_to_style.items()}
 
-    # Take top features
-    dimension_to_style = {dim[0]: dim[1][:cfg['top_k']] for dim in dimension_to_style.items()}
+    # Take top features from g2v and llm
+    def take_to_k_llm_and_g2v_feats(feats_list, top_k):
+        g2v_feats = [x for x in feats_list if x in gram2vec_feats][:top_k]
+        llm_feats = [x for x in feats_list if x not in gram2vec_feats][:top_k]
+        return g2v_feats + llm_feats
+    dimension_to_style = {dim[0]: take_to_k_llm_and_g2v_feats(dim[1], cfg['top_k']) for dim in dimension_to_style.items()}
 
 
     return {
