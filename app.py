@@ -205,6 +205,8 @@ def app(share=False):
             cluster_key = extract_cluster_key(selected_cluster)
             all_feats = style_map[cluster_key]
             llm_feats, g2v_feats = split_features(all_feats)
+            # print(f"Selected cluster: {selected_cluster} ({cluster_key})")
+            # print(f"LLM features: {llm_feats}")
 
             # Add "None" as a default selectable option
             llm_feats = ["None"] + llm_feats
@@ -223,12 +225,13 @@ def app(share=False):
             return (
                 gr.update(choices=llm_feats, value=llm_feats[0]),
                 gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
+                llm_feats
             )
 
         cluster_dropdown.change(
             fn=on_cluster_change,
             inputs=[cluster_dropdown, style_map_state],
-            outputs=[features_rb, gram2vec_rb]
+            outputs=[features_rb, gram2vec_rb , feature_list_state] #adding feature_list_state to persisit all llm features in the app state
         )
 
 
@@ -275,6 +278,10 @@ def app(share=False):
         combined_btn  = gr.Button("Show Combined Spans")
         combined_html = gr.HTML()
 
+        # print(f"in app: all_feats={feature_list_state.value}")
+        # print(f"in app: sel_feat_llm={features_rb.value}")
+
+
         combined_btn.click(
             fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v: show_combined_spans_all(
                 client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v
@@ -282,6 +289,11 @@ def app(share=False):
             inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb],
             outputs=[combined_html]
         )
+        # mapping -->
+        # iid = task_dropdown.value
+        # sel_feat_llm = features_rb.value
+        # all_feats = feature_list_state.value
+        # sel_feat_g2v = gram2vec_rb.value
 
     demo.launch(share=share)
 
