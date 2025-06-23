@@ -182,20 +182,21 @@ def load_interp_space(cfg):
         'dimension_to_style' : dimension_to_style, 
         'author_embedding' : author_embedding, 
         'author_labels' : author_labels,
-        'author_ids' : author_ids
+        'author_ids' : author_ids,
+        'clustered_authors_df' : clustered_authors_df
+
     }
 
 #function to handle zoom events
-def handle_zoom(event_json, bg_proj, bg_ids):
+def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
     """
-    event_json  – stringified JSON sent from JS listener
-                  {"xaxis":[xmin,xmax], "yaxis":[ymin,ymax]}
-    bg_proj     – (N,2) numpy array with the 2-D coords of background authors
-    bg_ids     – list of N labels that corresponds 1-to-1 with bg_proj
+    event_json         – stringified JSON from JS listener
+    bg_proj            – (N,2) numpy array with 2D coordinates
+    bg_lbls            – list of N author IDs
+    clustered_authors_df – pd.DataFrame containing authorID and final_attribute_name
     """
     print("[INFO] Handling zoom event")
     if not event_json:
-        # nothing to do (zoom was reset or first page load)
         return gr.update(value="")
 
     try:
@@ -203,22 +204,31 @@ def handle_zoom(event_json, bg_proj, bg_ids):
         (x_min, x_max) = ranges["xaxis"]
         (y_min, y_max) = ranges["yaxis"]
     except (json.JSONDecodeError, KeyError, ValueError):
-        # malformed payload → ignore
         return gr.update(value="")
 
-    # boolean mask of points that lie inside the current viewport
+    # Find points within the zoomed region
     mask = (
         (bg_proj[:, 0] >= x_min) & (bg_proj[:, 0] <= x_max) &
         (bg_proj[:, 1] >= y_min) & (bg_proj[:, 1] <= y_max)
     )
 
-    visible_ids = [str(lbl) for lbl, keep in zip(bg_ids, mask) if keep]
-    print(f"[INFO] Found {len(visible_ids)} visible labels in the current zoom range.")
-    print(f"[DEBUG] Visible labels: {visible_ids}")
+    visible_authors = [lbl for lbl, keep in zip(bg_lbls, mask) if keep]
 
-    # return something human-readable; adapt as needed
-    return gr.update(value="\n".join(visible_ids))
+    # Build display: authorID and top style features
+    lines = []
+    for author_id in visible_authors:
+        row = clustered_authors_df[clustered_authors_df["authorID"] == author_id]
+        if not row.empty:
+            feats = row.iloc[0].get("final_attribute_name", [])
+            if isinstance(feats, list):
+                feat_str = ", ".join(feats[:5])  # Show top 5 features
+            else:
+                feat_str = str(feats)
+        else:
+            feat_str = "No data found"
+        lines.append(f"{author_id}: {feat_str}")
 
+    return gr.update(value="\n".join(lines))
 
 def visualize_clusters_plotly(iid, cfg, instances):
     print("Generating cluster visualization")
@@ -230,6 +240,7 @@ def visualize_clusters_plotly(iid, cfg, instances):
     bg_emb      = np.array(interp['author_embedding'])
     bg_lbls     = interp['author_labels']
     bg_ids      = interp['author_ids']
+    clustered_authors_df = interp['clustered_authors_df']
 
     inst         = instances[iid]
     q_lat        = np.array(inst['author_latents'][:1])
@@ -413,7 +424,9 @@ def visualize_clusters_plotly(iid, cfg, instances):
       update(choices=display_clusters, value=display_clusters[cluster_label_query]),
       style_names, 
       bg_proj,  # Return background points
-      bg_ids    # Return background labels
+      bg_ids,    # Return background labels
+      clustered_authors_df,  # Return the DataFrame for zoom handling
+
     )
     # return fig, update(choices=feature_list, value=feature_list[0]),feature_list
 

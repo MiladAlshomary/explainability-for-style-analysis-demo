@@ -137,6 +137,7 @@ def app(share=False):
         run_btn   = gr.Button("Run visualization")
         bg_proj_state = gr.State()
         bg_lbls_state = gr.State()
+        bg_authors_df = gr.State()  # Holds the background authors DataFrame
         with gr.Row():
             with gr.Column(scale=3):
                 # plot_out   = gr.Plot(
@@ -227,7 +228,7 @@ def app(share=False):
         filtered_points = gr.Textbox(label="Filtered Points")  # Hidden component for filtered points
         axis_ranges.change(
             fn=handle_zoom, 
-            inputs=[axis_ranges, bg_proj_state, bg_lbls_state], 
+            inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df], 
             outputs=[filtered_points]
         )
 
@@ -273,11 +274,8 @@ def app(share=False):
                 int(iid.replace('Task ','')), cfg, instances
             ),
             inputs=[task_dropdown],
-            outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state] #plot_out --> plot
+            outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
         )
-        print(f"Visualizing complete.")
-        print(f"bg_labels = {bg_lbls_state.value}")
-        print(f" ......... \n\n")
 
         # When a cluster is selected, split features and populate radio buttons
         def on_cluster_change(selected_cluster, style_map):
