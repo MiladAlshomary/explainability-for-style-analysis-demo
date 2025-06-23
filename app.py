@@ -135,12 +135,80 @@ def app(share=False):
         # ── Visualization for clusters ─────────────────────────────
         gr.HTML(instruction_callout("Run visualization to see which author cluster contains the mystery document."))
         run_btn   = gr.Button("Run visualization")
+        bg_proj_state = gr.State()
+        bg_lbls_state = gr.State()
         with gr.Row():
             with gr.Column(scale=3):
-                plot_out   = gr.Plot(
+                # plot_out   = gr.Plot(
+                #     label="Cluster Visualization",
+                #     elem_id="cluster-plot"
+                # )
+                axis_ranges = gr.Textbox(visible=False, elem_id="axis-ranges")
+                plot = gr.Plot(
                     label="Cluster Visualization",
-                    elem_id="cluster-plot"
+                    elem_id="cluster-plot",
                 )
+                plot.change(
+                    fn=None,
+                    inputs=[plot],
+                    outputs=[axis_ranges],
+                    js="""
+                    function(){
+                        console.log("------------>[JS] plot.change() triggered<------------");
+
+                        let attempts = 0;
+                        const maxAttempts = 50;
+
+                        const tryAttach = () => {
+                            const gd = document.querySelector('#cluster-plot .js-plotly-plot');
+                            if (!gd) {
+                                if (++attempts < maxAttempts) {
+                                    requestAnimationFrame(tryAttach);
+                                } else {
+                                    console.error(" ------------>Could not find .js-plotly-plot after multiple attempts.<------------");
+                                }
+                                return;
+                            }
+
+                            if (gd.__zoomListenerAttached) {
+                                console.log("------------>Zoom listener already attached.<------------");
+                                return;
+                            }
+
+                            gd.__zoomListenerAttached = true;
+                            console.log("------------>Zoom listener attached!<------------");
+
+                            gd.on('plotly_relayout', (ev) => {
+                                if (
+                                    ev['xaxis.range[0]'] === undefined ||
+                                    ev['xaxis.range[1]'] === undefined ||
+                                    ev['yaxis.range[0]'] === undefined ||
+                                    ev['yaxis.range[1]'] === undefined
+                                ) return;
+
+                                const payload = {
+                                    xaxis: [ev['xaxis.range[0]'], ev['xaxis.range[1]']],
+                                    yaxis: [ev['yaxis.range[0]'], ev['yaxis.range[1]']]
+                                };
+
+                                const txtbox = document.querySelector('#axis-ranges textarea');
+                                if (txtbox) {
+                                    txtbox.value = JSON.stringify(payload);
+                                    txtbox.dispatchEvent(new Event('input', { bubbles: true }));
+                                    console.log("------------> Zoom payload dispatched:<------------", payload);
+                                } else {
+                                    console.warn("------------> No hidden textbox found to write zoom payload.<------------");
+                                }
+                            });
+                        };
+
+                        requestAnimationFrame(tryAttach);
+                        return '';
+                    }
+                    """
+                )
+
+
             with gr.Column(scale=1):
                 expl_html = """
                     <h4>What am I looking at?</h4>
@@ -155,6 +223,14 @@ def app(share=False):
                 """
                 gr.HTML(styled_html(expl_html))
         
+        # Add handler for filtered points
+        filtered_points = gr.Textbox(label="Filtered Points")  # Hidden component for filtered points
+        axis_ranges.change(
+            fn=handle_zoom, 
+            inputs=[axis_ranges, bg_proj_state, bg_lbls_state], 
+            outputs=[filtered_points]
+        )
+
         # ── Dynamic Cluster Choice dropdown ──────────────────────────────────
         gr.HTML(instruction_callout("Choose a cluster from the dropdown below to inspect whether its features appear in the mystery author’s text."))
         cluster_dropdown = gr.Dropdown(choices=[], label="Select Cluster to Inspect")
@@ -197,8 +273,11 @@ def app(share=False):
                 int(iid.replace('Task ','')), cfg, instances
             ),
             inputs=[task_dropdown],
-            outputs=[plot_out, cluster_dropdown, style_map_state]
+            outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state] #plot_out --> plot
         )
+        print(f"Visualizing complete.")
+        print(f"bg_labels = {bg_lbls_state.value}")
+        print(f" ......... \n\n")
 
         # When a cluster is selected, split features and populate radio buttons
         def on_cluster_change(selected_cluster, style_map):
