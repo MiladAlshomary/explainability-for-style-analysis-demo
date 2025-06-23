@@ -118,6 +118,8 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
 
     # get llm spans map (list of spans objects) for each text
     if selected_feature_llm and selected_feature_llm != "None":
+        print(f"in show spans: Selected LLM feature: {selected_feature_llm}")
+        print(f"in show spans: features_list: {features_list}")
         llm_maps = [
         generate_feature_spans_cached(client, f"{iid}", texts[0][1], features_list, role="mystery"),
         generate_feature_spans_cached(client, f"{iid}_cand0",   texts[1][1], features_list, role="candidate"),
@@ -129,7 +131,7 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
             [
                 # positional: first arg → start_char, second → end_char
                 Span(txt.find(s), txt.find(s) + len(s))
-                for s in llm_maps[i].get(selected_feature_llm, [])
+                for s in llm_maps[i].get(selected_feature_llm) 
                 if s in txt
             ]
             for i, (_, txt) in enumerate(texts)
