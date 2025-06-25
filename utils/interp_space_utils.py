@@ -1,0 +1,211 @@
+import sys
+
+import pandas as pd
+import numpy as np
+import math
+import string
+from collections import Counter, defaultdict
+from typing import List, Any
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+
+def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: string, model_name: string ):
+    """
+    Generates style embeddings for documents in a background corpus using a specified model.
+
+    Args:
+        background_corpus_df (pd.DataFrame): DataFrame containing the corpus.
+        text_clm (str): Name of the column containing the text data.
+        model_name (str): Name of the model to use for generating embeddings.
+
+    Returns:
+        pd.Series: A pandas Series containing the style embeddings for each document.
+    """
+    from transformers import AutoModel, AutoTokenizer
+
+    # This is a placeholder. The actual implementation would involve
+    # loading the specified model and using it to generate embeddings
+    # for each document's text in the 'text_clm' column.
+    # For demonstration purposes, returning dummy data.
+    print(f"Generating style embeddings using {model_name} on column '{text_clm}'...")
+    # Replace with actual model loading and inference logic
+
+    # Loading a transformer-based model and use encode method to encode the text into latent space
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
+
+    embeddings = model(background_corpus_df[text_clm].tolist())
+    background_corpus_df['style_embedding'] = embeddings.tolist()
+
+    return background_corpus_df
+
+def get_style_feats_distribution(documentIDs, style_feats_dict):
+    style_feats = []
+    for documentId in documentIDs:
+        if documentId not in document_to_style_feats:
+            #print(documentId)
+            continue
+
+        style_feats+= document_to_style_feats[documentId]
+
+    tfidf = [style_feats.count(key) * val for key, val in style_feats_dict.items()]
+
+    return tfidf
+
+def get_cluster_top_feats(style_feats_distribution, style_feats_list, top_k=5):
+    sorted_feats = np.argsort(style_feats_distribution)[::-1]
+    top_feats = [style_feats_list[x] for x in sorted_feats[:top_k] if style_feats_distribution[x] > 0]
+    return top_feats
+
+def compute_clusters_style_representation(
+    background_corpus_df: pd.DataFrame,
+    cluster_ids: List[Any],
+    other_cluster_ids: List[Any],
+    features_clm_name: str,
+    cluster_label_clm_name: str = 'cluster_label',
+    top_n: int = 10
+) -> List[str]:
+    """
+    Given a DataFrame with document IDs, cluster IDs, and feature lists,
+    return the top N features that are most important in the specified `cluster_ids`
+    while having low importance in `other_cluster_ids`.
+    Importance is determined by TF-IDF scores. The final score for a feature is
+    (summed TF-IDF in `cluster_ids`) - (summed TF-IDF in `other_cluster_ids`).
+
+    Parameters:
+    - background_corpus_df: pd.DataFrame. Must contain the columns specified by
+                            `cluster_label_clm_name` and `features_clm_name`.
+                            The column `features_clm_name` should contain lists of strings (features).
+    - cluster_ids: List of cluster IDs for which to find representative features (target clusters).
+    - other_cluster_ids: List of cluster IDs whose features should be down-weighted.
+                         Features prominent in these clusters will have their scores reduced.
+                         Pass an empty list or None if no contrastive clusters are needed.
+    - features_clm_name: The name of the column in `background_corpus_df` that
+                         contains the list of features for each document.
+    - cluster_label_clm_name: The name of the column in `background_corpus_df`
+                              that contains the cluster labels. Defaults to 'cluster_label'.
+    - top_n: Number of top features to return.
+    Returns:
+    - List[str]: A list of feature names. These are up to `top_n` features
+                 ranked by their adjusted TF-IDF scores (score in `cluster_ids`
+                 minus score in `other_cluster_ids`). Only features with a final
+                 adjusted score > 0 are included.
+    """
+
+    assert background_corpus_df[features_clm_name].apply(
+        lambda x: isinstance(x, list) and all(isinstance(feat, str) for feat in x)
+    ).all(), f"Column '{features_clm_name}' must contain lists of strings."
+
+    # Compute TF-IDF on the entire corpus
+    vectorizer = TfidfVectorizer(
+        tokenizer=lambda x: x,
+        preprocessor=lambda x: x,
+        token_pattern=None  # Disable default token pattern, treat items in list as tokens
+    )
+    tfidf_matrix = vectorizer.fit_transform(background_corpus_df[features_clm_name])
+    feature_names = vectorizer.get_feature_names_out()
+
+    # Get boolean mask for documents in selected clusters
+    selected_mask = background_corpus_df[cluster_label_clm_name].isin(cluster_ids).to_numpy()
+
+    if not selected_mask.any():
+        return [] # No documents found for the given cluster_ids
+
+    # Subset the TF-IDF matrix using the boolean mask
+    selected_tfidf = tfidf_matrix[selected_mask]
+
+    # Sum TF-IDF scores across documents for each feature in the target clusters
+    target_feature_scores_sum = selected_tfidf.sum(axis=0).A1  # Convert to 1D array
+
+    # Initialize adjusted scores with target scores
+    adjusted_feature_scores = target_feature_scores_sum.copy()
+
+    # If other_cluster_ids are provided and not empty, subtract their TF-IDF sums
+    if other_cluster_ids: # Checks if the list is not None and not empty
+        other_selected_mask = background_corpus_df[cluster_label_clm_name].isin(other_cluster_ids).to_numpy()
+
+        if other_selected_mask.any():
+            other_selected_tfidf = tfidf_matrix[other_selected_mask]
+            contrast_feature_scores_sum = other_selected_tfidf.sum(axis=0).A1
+            
+            # Element-wise subtraction; assumes feature_names aligns for both sums
+            adjusted_feature_scores -= contrast_feature_scores_sum
+
+    # Map scores to feature names
+    feature_score_dict = dict(zip(feature_names, adjusted_feature_scores))
+    # Sort features by score
+    sorted_features = sorted(feature_score_dict.items(), key=lambda item: item[1], reverse=True)
+
+    # Return the names of the top_n features that have a score > 0
+    top_features = [feature for feature, score in sorted_features if score > 0][:top_n]
+
+    return top_features
+
+
+def generate_interpretable_space_representation(interp_space_path, styles_df_path, feat_clm, output_clm, num_feats=5):
+    
+    styles_df = pd.read_csv(styles_df_path)[[feat_clm, "documentID"]]
+
+    # A dictionary of style features and their IDF
+    style_feats_agg_df = styles_df.groupby(feat_clm).agg({'documentID': lambda x : len(list(x))}).reset_index()
+    style_feats_agg_df['document_freq'] = style_feats_agg_df.documentID
+    style_to_feats_dfreq = {x[0]: math.log(styles_df.documentID.nunique()/x[1]) for x in zip(style_feats_agg_df[feat_clm].tolist(), style_feats_agg_df.document_freq.tolist())}
+    
+    # A list of style features we work with
+    style_feats_list = style_feats_agg_df[feat_clm].tolist()
+    print('Number of style feats ', len(style_feats_list))
+    
+    # A list of documents and what list of style features each has
+    doc_style_agg_df     = styles_df.groupby('documentID').agg({feat_clm: lambda x : list(x)}).reset_index()
+    document_to_feats_dict = {x[0]: x[1] for x in zip(doc_style_agg_df.documentID.tolist(), doc_style_agg_df[feat_clm].tolist())}
+    
+    
+
+    # Load the clustering information
+    df = pd.read_pickle(interp_space_path)
+    df = df[df.cluster_label != -1]
+    # A cluster to list of documents
+    clusterd_df = df.groupby('cluster_label').agg({
+        'documentID': lambda x: [d_id for doc_ids in x for d_id in doc_ids]
+    }).reset_index()
+    
+    # Filter-in only documents that has a style description
+    clusterd_df['documentID'] = clusterd_df.documentID.apply(lambda documentIDs: [documentID for documentID in documentIDs if documentID in document_to_feats_dict])
+    # Map from cluster label to list of features through the document information
+    clusterd_df[feat_clm] = clusterd_df.documentID.apply(lambda doc_ids: [f for d_id in doc_ids for f in document_to_feats_dict[d_id]])
+
+    def compute_tfidf(row):
+        style_counts = Counter(row[feat_clm])
+        total_num_styles = sum(style_counts.values())
+        #print(style_counts, total_num_styles)
+        style_distribution = {
+            style: math.log(1+count) * style_to_feats_dfreq[style] if style in style_to_feats_dfreq else 0 for style, count in style_counts.items()
+        } #TF-IDF
+        
+        return style_distribution
+
+    def create_tfidf_rep(tfidf_dist, num_feats):
+        style_feats = sorted(tfidf_dist.items(), key=lambda x: -x[1])
+        top_k_feats = [x[0] for x in style_feats[:num_feats] if str(x[0]) != 'nan']
+        return top_k_feats
+
+    clusterd_df[output_clm +'_dist'] = clusterd_df.apply(lambda row: compute_tfidf(row), axis=1)
+    clusterd_df[output_clm]         = clusterd_df[output_clm +'_dist'].apply(lambda dist: create_tfidf_rep(dist, num_feats))
+
+        
+    return clusterd_df
+
+if __name__ == "__main__":
+    background_corpus = pd.read_pickle('../datasets/luar_interp_space_cluster_09/train_authors.pkl')
+    print(background_corpus.columns)
+    print(background_corpus[['authorID', 'final_attribute_name', 'cluster_label']].head())
+    print(background_corpus[background_corpus.authorID=='00005a5c-5c06-3a36-37f9-53c6422a31d8']['final_attribute_name'].tolist())
+    # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
+    feats = compute_clusters_style_representation(
+        background_corpus_df=background_corpus,
+        cluster_ids=['00005a5c-5c06-3a36-37f9-53c6422a31d8',],
+        other_cluster_ids=[], # Pass the contrastive cluster IDs here
+        cluster_label_clm_name='authorID',
+        features_clm_name='final_attribute_name'
+    )
+    print(feats)
