@@ -3,39 +3,93 @@ import sys
 import pandas as pd
 import numpy as np
 import math
-import string
 from collections import Counter, defaultdict
 from typing import List, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: string, model_name: string ):
+def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, model_name: str) -> pd.DataFrame:
     """
     Generates style embeddings for documents in a background corpus using a specified model.
+    If a row in `text_clm` contains a list of strings, the final embedding for that row
+    is the average of the embeddings of all strings in the list.
 
     Args:
         background_corpus_df (pd.DataFrame): DataFrame containing the corpus.
-        text_clm (str): Name of the column containing the text data.
+        text_clm (str): Name of the column containing the text data (either string or list of strings).
         model_name (str): Name of the model to use for generating embeddings.
 
     Returns:
-        pd.Series: A pandas Series containing the style embeddings for each document.
+        pd.DataFrame: The input DataFrame with a new column for style embeddings.
     """
-    from transformers import AutoModel, AutoTokenizer
+    from sentence_transformers import SentenceTransformer
+    import torch
 
-    # This is a placeholder. The actual implementation would involve
-    # loading the specified model and using it to generate embeddings
-    # for each document's text in the 'text_clm' column.
-    # For demonstration purposes, returning dummy data.
+    if model_name not in [
+        'gabrielloiseau/LUAR-MUD-sentence-transformers',
+        'gabrielloiseau/LUAR-CRUD-sentence-transformers',
+        'miladalsh/light-luar',
+        'AnnaWegmann/Style-Embedding',
+
+    ]:
+        print('Model is not supported')
+        return background_corpus_df
+
+
     print(f"Generating style embeddings using {model_name} on column '{text_clm}'...")
-    # Replace with actual model loading and inference logic
 
-    # Loading a transformer-based model and use encode method to encode the text into latent space
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name)
+    model = SentenceTransformer(model_name)
+    embedding_dim = model.get_sentence_embedding_dimension()
 
-    embeddings = model(background_corpus_df[text_clm].tolist())
-    background_corpus_df['style_embedding'] = embeddings.tolist()
+    # Heuristic to check if the column contains lists of strings by checking the first valid item.
+    # This assumes the column is homogenous.
+    is_list_column = False
+    if not background_corpus_df.empty:
+        # Get the first non-NaN value to inspect its type
+        series_no_na = background_corpus_df[text_clm].dropna()
+        if not series_no_na.empty:
+            first_valid_item = series_no_na.iloc[0]
+            if isinstance(first_valid_item, list):
+                is_list_column = True
+
+    if is_list_column:
+        # Flatten all texts into a single list for batch processing
+        texts_to_encode = []
+        row_lengths = []
+        for text_list in background_corpus_df[text_clm]:
+            # Ensure we handle None, empty lists, or other non-list types gracefully
+            if isinstance(text_list, list) and text_list:
+                texts_to_encode.extend(text_list)
+                row_lengths.append(len(text_list))
+            else:
+                row_lengths.append(0)
+
+        if texts_to_encode:
+            all_embeddings = model.encode(texts_to_encode, convert_to_tensor=True, show_progress_bar=True)
+        else:
+            all_embeddings = torch.empty((0, embedding_dim), device=model.device)
+
+        # Reconstruct and average embeddings for each row
+        final_embeddings = []
+        current_pos = 0
+        for length in row_lengths:
+            if length > 0:
+                row_embeddings = all_embeddings[current_pos:current_pos + length]
+                avg_embedding = torch.mean(row_embeddings, dim=0)
+                final_embeddings.append(avg_embedding.cpu().numpy())
+                current_pos += length
+            else:
+                final_embeddings.append(np.zeros(embedding_dim))
+    else:
+        # Column contains single strings
+        texts = background_corpus_df[text_clm].fillna("").tolist()
+        # convert_to_tensor=False is faster if we just need numpy arrays
+        embeddings = model.encode(texts, show_progress_bar=True)
+        final_embeddings = list(embeddings)
+
+    # Create a clean column name from the model name
+    col_name = f'{model_name.split("/")[-1]}_style_embedding'
+    background_corpus_df[col_name] = final_embeddings
 
     return background_corpus_df
 
@@ -196,16 +250,17 @@ def generate_interpretable_space_representation(interp_space_path, styles_df_pat
     return clusterd_df
 
 if __name__ == "__main__":
-    background_corpus = pd.read_pickle('../datasets/luar_interp_space_cluster_09/train_authors.pkl')
+    background_corpus = pd.read_pickle('../datasets/luar_interp_space_cluster_19/train_authors.pkl')
     print(background_corpus.columns)
-    print(background_corpus[['authorID', 'final_attribute_name', 'cluster_label']].head())
-    print(background_corpus[background_corpus.authorID=='00005a5c-5c06-3a36-37f9-53c6422a31d8']['final_attribute_name'].tolist())
-    # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
-    feats = compute_clusters_style_representation(
-        background_corpus_df=background_corpus,
-        cluster_ids=['00005a5c-5c06-3a36-37f9-53c6422a31d8',],
-        other_cluster_ids=[], # Pass the contrastive cluster IDs here
-        cluster_label_clm_name='authorID',
-        features_clm_name='final_attribute_name'
-    )
-    print(feats)
+    print(background_corpus[['authorID', 'fullText', 'cluster_label']].head())
+    # # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
+    # feats = compute_clusters_style_representation(
+    #     background_corpus_df=background_corpus,
+    #     cluster_ids=['00005a5c-5c06-3a36-37f9-53c6422a31d8',],
+    #     other_cluster_ids=[], # Pass the contrastive cluster IDs here
+    #     cluster_label_clm_name='authorID',
+    #     features_clm_name='final_attribute_name'
+    # )
+    # print(feats)
+    generate_style_embedding(background_corpus, 'fullText', 'AnnaWegmann/Style-Embedding')
+    print(background_corpus.columns)
