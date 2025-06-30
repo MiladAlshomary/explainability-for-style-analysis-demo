@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
 import re
+from utils.interp_space_utils import compute_clusters_style_representation
 
 import plotly.io as pio
 
@@ -214,21 +215,24 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
 
     visible_authors = [lbl for lbl, keep in zip(bg_lbls, mask) if keep]
 
-    # Build display: authorID and top style features
-    lines = []
-    for author_id in visible_authors:
-        row = clustered_authors_df[clustered_authors_df["authorID"] == author_id]
-        if not row.empty:
-            feats = row.iloc[0].get("final_attribute_name", [])
-            if isinstance(feats, list):
-                feat_str = ", ".join(feats[:5])  # Show top 5 features
-            else:
-                feat_str = str(feats)
-        else:
-            feat_str = "No data found"
-        lines.append(f"{author_id}: {feat_str}")
+    # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
+    llm_feats = compute_clusters_style_representation(
+        background_corpus_df=clustered_authors_df,
+        cluster_ids=visible_authors,
+        cluster_label_clm_name='authorID',
+        other_cluster_ids=[],
+        features_clm_name='final_attribute_name_manually_processed'
+    )
 
-    return gr.update(value="\n".join(lines))
+    g2v_feats = compute_clusters_style_representation(
+        background_corpus_df=clustered_authors_df,
+        cluster_ids=visible_authors,
+        cluster_label_clm_name='authorID',
+        other_cluster_ids=[],
+        features_clm_name='gram2vec_feats'
+    )
+
+    return gr.update(value="\n".join(llm_feats))
 
 def visualize_clusters_plotly(iid, cfg, instances):
     print("Generating cluster visualization")
