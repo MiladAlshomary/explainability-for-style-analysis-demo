@@ -11,7 +11,7 @@ _g2v_df      = pd.read_csv("datasets/gram2vec_feats.csv")
 GRAM2VEC_SET = set(_g2v_df['gram2vec_feats'].unique())
 
 # Bump this whenever there is a change prompt, feature space, etc...
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 def _feat_hash(feature: str) -> str:
     blob = json.dumps({

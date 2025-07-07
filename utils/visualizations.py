@@ -11,6 +11,8 @@ from plotly.colors import sample_colorscale
 from gradio import update
 import re
 from utils.interp_space_utils import compute_clusters_style_representation
+from utils.llm_feat_utils import split_features
+from utils.gram2vec_feat_utils import get_shorthand
 
 import plotly.io as pio
 
@@ -215,6 +217,8 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
 
     visible_authors = [lbl for lbl, keep in zip(bg_lbls, mask) if keep]
 
+    print(f"[INFO] Zoomed region includes {len(visible_authors)} authors.")
+
     # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
     llm_feats = compute_clusters_style_representation(
         background_corpus_df=clustered_authors_df,
@@ -224,6 +228,8 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
         features_clm_name='final_attribute_name_manually_processed'
     )
 
+    llm_feats = ['None'] + llm_feats
+
     g2v_feats = compute_clusters_style_representation(
         background_corpus_df=clustered_authors_df,
         cluster_ids=visible_authors,
@@ -231,8 +237,28 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
         other_cluster_ids=[],
         features_clm_name='gram2vec_feats'
     )
+    # Filter out any Gram2Vec feature without a shorthand
+    filtered_g2v = []
+    for feat in g2v_feats:
+        if get_shorthand(feat) is None:
+            print(f"Skipping Gram2Vec feature without shorthand: {feat}")
+        else:
+            filtered_g2v.append(feat)
+    
+    # Add "None" as a default selectable option
+    filtered_g2v = ["None"] + filtered_g2v
 
-    return gr.update(value="\n".join(llm_feats))
+    print(f"[INFO] Found {len(llm_feats)} LLM features and {len(g2v_feats)} Gram2Vec features in the zoomed region.")   
+
+    print(f"[INFO] LLM features: {llm_feats}")
+    print(f"[INFO] Gram2Vec features: {filtered_g2v}")
+
+    return (
+        gr.update(choices=llm_feats, value=llm_feats[0]),
+        gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
+        llm_feats
+    )
+    # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
 def visualize_clusters_plotly(iid, cfg, instances):
     print("Generating cluster visualization")
@@ -447,3 +473,31 @@ def extract_cluster_key(display_label: str) -> int:
     return int(m.group(1))
 
 
+
+# When a cluster is selected, split features and populate radio buttons
+def on_cluster_change(selected_cluster, style_map):
+    cluster_key = extract_cluster_key(selected_cluster)
+    all_feats = style_map[cluster_key]
+    llm_feats, g2v_feats = split_features(all_feats)
+    # print(f"Selected cluster: {selected_cluster} ({cluster_key})")
+    # print(f"LLM features: {llm_feats}")
+
+    # Add "None" as a default selectable option
+    llm_feats = ["None"] + llm_feats
+
+    # filter out any g2v feature without a shorthand
+    filtered_g2v = []
+    for feat in g2v_feats:
+        if get_shorthand(feat) is None:
+            print(f"Skipping Gram2Vec feature without shorthand: {feat}")
+        else:
+            filtered_g2v.append(feat)
+    
+    # Add "None" as a default selectable option
+    filtered_g2v = ["None"] + filtered_g2v
+
+    return (
+        gr.update(choices=llm_feats, value=llm_feats[0]),
+        gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
+        llm_feats
+    )

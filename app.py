@@ -7,6 +7,7 @@ from utils.gram2vec_feat_utils import *
 from utils.ui import *
 
 import yaml
+import argparse
 
 from dotenv import load_dotenv  
 from openai import OpenAI
@@ -25,7 +26,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # ── load once at startup ────────────────────────────────────────
 GRAM2VEC_SHORTHAND = load_code_map()  
 
-def app(share=False):
+def app(share=False, use_cluster_feats=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
@@ -224,19 +225,16 @@ def app(share=False):
                 """
                 gr.HTML(styled_html(expl_html))
         
-        # Add handler for filtered points
-        filtered_points = gr.Textbox(label="Filtered Points")  # Hidden component for filtered points
-        axis_ranges.change(
-            fn=handle_zoom, 
-            inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df], 
-            outputs=[filtered_points]
-        )
+        cluster_dropdown = gr.Dropdown(choices=[], label="Select Cluster to Inspect", visible=False)
+        style_map_state = gr.State()
 
-        # ── Dynamic Cluster Choice dropdown ──────────────────────────────────
-        gr.HTML(instruction_callout("Choose a cluster from the dropdown below to inspect whether its features appear in the mystery author’s text."))
-        cluster_dropdown = gr.Dropdown(choices=[], label="Select Cluster to Inspect")
-        style_map_state = gr.State()  # Holds the mapping of cluster->features
-        
+        if use_cluster_feats:
+            # ── Dynamic Cluster Choice dropdown ──────────────────────────────────
+            gr.HTML(instruction_callout("Choose a cluster from the dropdown below to inspect whether its features appear in the mystery author’s text."))
+            cluster_dropdown.visible = True
+        else:
+            gr.HTML(instruction_callout("Zoom in on the plot to select a set of background authors and see the presence of the top features from this set in candidate and mystery authors."))
+           
         with gr.Row():
             # ── LLM Features Column ──────────────────────────────────
             with gr.Column(scale=1, min_width=0):
@@ -276,40 +274,23 @@ def app(share=False):
             inputs=[task_dropdown],
             outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
         )
-
-        # When a cluster is selected, split features and populate radio buttons
-        def on_cluster_change(selected_cluster, style_map):
-            cluster_key = extract_cluster_key(selected_cluster)
-            all_feats = style_map[cluster_key]
-            llm_feats, g2v_feats = split_features(all_feats)
-            # print(f"Selected cluster: {selected_cluster} ({cluster_key})")
-            # print(f"LLM features: {llm_feats}")
-
-            # Add "None" as a default selectable option
-            llm_feats = ["None"] + llm_feats
-
-            # filter out any g2v feature without a shorthand
-            filtered_g2v = []
-            for feat in g2v_feats:
-                if get_shorthand(feat) is None:
-                    print(f"Skipping Gram2Vec feature without shorthand: {feat}")
-                else:
-                    filtered_g2v.append(feat)
-            
-            # Add "None" as a default selectable option
-            filtered_g2v = ["None"] + filtered_g2v
-
-            return (
-                gr.update(choices=llm_feats, value=llm_feats[0]),
-                gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
-                llm_feats
+        
+        # Populate feature list based on selection. 
+        if use_cluster_feats:
+            # Use cluster-based flow
+            cluster_dropdown.change(
+                fn=on_cluster_change,
+                inputs=[cluster_dropdown, style_map_state],
+                outputs=[features_rb, gram2vec_rb , feature_list_state] 
+                #adding feature_list_state to persisit all llm features in the app state
             )
+        else:
 
-        cluster_dropdown.change(
-            fn=on_cluster_change,
-            inputs=[cluster_dropdown, style_map_state],
-            outputs=[features_rb, gram2vec_rb , feature_list_state] #adding feature_list_state to persisit all llm features in the app state
-        )
+            axis_ranges.change(
+                fn=handle_zoom, 
+                inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df], 
+                outputs=[features_rb, gram2vec_rb , feature_list_state]
+            )
 
 
         # ── Show combined feature‐span highlights ──
@@ -375,4 +356,7 @@ def app(share=False):
     demo.launch(share=share)
 
 if __name__ == "__main__":
-    app(share=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--use_cluster_feats", action="store_true", help="Use cluster-based selection for features")
+    args = parser.parse_args()
+    app(share=True, use_cluster_feats=args.use_cluster_feats)
