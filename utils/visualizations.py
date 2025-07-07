@@ -151,6 +151,9 @@ def load_interp_space(cfg):
     author_labels    = clustered_authors_df.cluster_label.tolist()
     author_ids      = clustered_authors_df.authorID.tolist()
 
+    # filter out gram2vec features that doesn't have representation
+    clustered_authors_df['gram2vec_feats'] = clustered_authors_df.gram2vec_feats.apply(lambda feats: [feat for feat in feats if get_shorthand(feat) is not None])
+    
     # Load a list of gram2vec features --> we use it to distinguish the cluster representations whether they come from gram2vec or llms
     gram2vec_df = pd.read_csv(gram2vec_feats_path)
     gram2vec_feats = gram2vec_df.gram2vec_feats.unique().tolist()
@@ -237,6 +240,7 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
         other_cluster_ids=[],
         features_clm_name='gram2vec_feats'
     )
+    
     # Filter out any Gram2Vec feature without a shorthand
     filtered_g2v = []
     for feat in g2v_feats:
