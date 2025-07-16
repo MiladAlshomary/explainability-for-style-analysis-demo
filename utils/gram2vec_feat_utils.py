@@ -154,6 +154,7 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
                 spans = find_feature_spans(txt, short)
                 # spans = [Span(fs.start_char, fs.end_char) for fs in raw_spans]
             except:
+                print(f"Error finding spans for {short} {role}")
                 spans = []
             gram_spans_list.append(spans)
     else:

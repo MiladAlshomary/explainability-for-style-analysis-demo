@@ -1,3 +1,7 @@
+import gradio as gr
+from utils.visualizations import load_instance
+
+
 # ── Global CSS to be prepended to every block ─────────────────────────────────
 GLOBAL_CSS = """
 <style>
@@ -60,3 +64,23 @@ def instruction_callout(text: str) -> str:
     </div>
     """
     return styled_html(callout)
+
+# Toggle which input UI is visible
+def toggle_task(mode):
+    print(mode)
+    return (
+        gr.update(visible=(mode == "Predefined HRS Task")),
+        gr.update(visible=(mode == "Upload Your Own Task"))
+    )
+
+# Update displayed texts based on mode
+def update_task_display(mode, iid, mystery_txt, cand1, cand2, cand3):
+    if mode == "Predefined HRS Task":
+        return load_instance(int(iid.replace('Task ', '')), instances)
+    else:
+        header_html = "<h3>Custom Uploaded Task</h3>"
+        def wrap(text):
+            return f"<div style='padding:0.5em; border:1px solid #ddd; margin:0.2em 0;'>{text}</div>"
+        mystery_html = wrap(mystery_txt)
+        cand_htmls = [wrap(t) for t in (cand1, cand2, cand3)]
+        return [header_html, mystery_html] + cand_htmls

@@ -103,8 +103,45 @@ def app(share=False, use_cluster_feats=False):
 
         # ── Dropdown and to select instance ─────────────────────────────
         # Load default instance values for display
-        default_outputs = load_instance(0, instances)
-        gr.HTML("""
+        # default_outputs = load_instance(0, instances)
+        # gr.HTML("""
+        #             <div style="
+        #                 font-size: 1.3em;
+        #                 font-weight: 600;
+        #                 margin-bottom: 0.5em;
+        #             ">
+        #                 Pick a pre-defined task to investigate (a mystery text and its three candidate authors)
+        #             </div>
+        #             """)
+
+        # task_dropdown = gr.Dropdown(
+        #     choices=[f"Task {i}" for i in instance_ids],
+        #     value=f"Task {instance_ids[0]}",
+        #     label="Choose which mystery document to explain",
+        # )
+
+
+        # # ── HTML outputs for author texts… ─────────────────────────────
+        # header  = gr.HTML(value=default_outputs[0])
+        # mystery = gr.HTML(value=default_outputs[1])
+        # with gr.Row():
+        #     c0, c1, c2 = gr.HTML(value=default_outputs[2]), gr.HTML(value=default_outputs[3]), gr.HTML(value=default_outputs[4])
+
+        # task_dropdown.change(
+        #     lambda iid: load_instance(int(iid.replace('Task ','')), instances),
+        #     inputs=task_dropdown,
+        #     outputs=[header, mystery, c0, c1, c2]
+        # )    
+
+        # ── Task Source Selection ─────────────────────────────────
+        task_mode = gr.Radio(
+            choices=["Predefined HRS Task", "Upload Your Own Task"],
+            value="Predefined HRS Task",
+            label="Select Task Source"
+        )
+        with gr.Column():
+            with gr.Column(visible=True) as predefined_container:
+                gr.HTML("""
                     <div style="
                         font-size: 1.3em;
                         font-weight: 600;
@@ -113,25 +150,64 @@ def app(share=False, use_cluster_feats=False):
                         Pick a pre-defined task to investigate (a mystery text and its three candidate authors)
                     </div>
                     """)
+                task_dropdown = gr.Dropdown(
+                    choices=[f"Task {i}" for i in instance_ids],
+                    value=f"Task {instance_ids[0]}",
+                    label="Choose which mystery document to explain",
+                )
+            with gr.Column(visible=False) as custom_container:
+                gr.HTML("""
+                    <div style="
+                        font-size: 1.3em;
+                        font-weight: 600;
+                        margin-bottom: 0.5em;
+                    ">
+                        Upload your own task
+                    </div>
+                    """)
+                mystery_input = gr.Textbox(
+                    lines=8,
+                    placeholder="Paste your mystery author text here…",
+                    label="Mystery Author Text"
+                )
+                candidate1 = gr.Textbox(lines=3, label="Candidate Author Text 1")
+                candidate2 = gr.Textbox(lines=3, label="Candidate Author Text 2")
+                candidate3 = gr.Textbox(lines=3, label="Candidate Author Text 3")
 
-        task_dropdown = gr.Dropdown(
-            choices=[f"Task {i}" for i in instance_ids],
-            value=f"Task {instance_ids[0]}",
-            label="Choose which mystery document to explain",
-        )
-
-
-        # ── HTML outputs for author texts… ─────────────────────────────
+        # ── HTML outputs for author texts ───────────────────────────
+        default_outputs = load_instance(0, instances)
         header  = gr.HTML(value=default_outputs[0])
         mystery = gr.HTML(value=default_outputs[1])
         with gr.Row():
-            c0, c1, c2 = gr.HTML(value=default_outputs[2]), gr.HTML(value=default_outputs[3]), gr.HTML(value=default_outputs[4])
+            c0 = gr.HTML(value=default_outputs[2])
+            c1 = gr.HTML(value=default_outputs[3])
+            c2 = gr.HTML(value=default_outputs[4])
 
-        task_dropdown.change(
-            lambda iid: load_instance(int(iid.replace('Task ','')), instances),
-            inputs=task_dropdown,
+        # ── Wire up callbacks ─────────────────────────────────────
+        task_mode.change(
+            fn=toggle_task,
+            inputs=[task_mode],
+            outputs=[predefined_container, custom_container]
+        )
+        # Update displayed texts for both modes
+        task_mode.change(
+            fn=update_task_display,
+            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3],
             outputs=[header, mystery, c0, c1, c2]
-        )    
+        )
+        # When selecting a predefined task
+        task_dropdown.change(
+            fn=lambda iid: load_instance(int(iid.replace('Task ', '')), instances),
+            inputs=[task_dropdown],
+            outputs=[header, mystery, c0, c1, c2]
+        )
+        # When user edits custom fields
+        for inp in [mystery_input, candidate1, candidate2, candidate3]:
+            inp.change(
+                fn=update_task_display,
+                inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3],
+                outputs=[header, mystery, c0, c1, c2]
+            )
 
         # ── Visualization for clusters ─────────────────────────────
         gr.HTML(instruction_callout("Run visualization to see which author cluster contains the mystery document."))
