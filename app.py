@@ -29,6 +29,9 @@ GRAM2VEC_SHORTHAND = load_code_map()
 def app(share=False, use_cluster_feats=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
+    interp      = load_interp_space(cfg)
+    clustered_authors_df = interp['clustered_authors_df']
+
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
         # ── Big Centered Title ──────────────────────────────────────────
         gr.HTML(styled_block("""
@@ -174,7 +177,7 @@ def app(share=False, use_cluster_feats=False):
             c1_state = gr.State(value=default_outputs[3])  # Store unformatted candidate 2 text for later use
             c2_state = gr.State(value=default_outputs[4])  # Store unformatted candidate 3 text for later use
         
-        custom_embeddings_df = gr.State()
+        #custom_embeddings_df = gr.State()
         # ── Wire up callbacks ─────────────────────────────────────
         task_mode.change(
             fn=toggle_task,
@@ -188,6 +191,7 @@ def app(share=False, use_cluster_feats=False):
                 mode,
                 dropdown,
                 instances,       # closed over
+                clustered_authors_df,
                 mystery,
                 c1,
                 c2,
@@ -197,7 +201,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, custom_embeddings_df, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
         )
         # When selecting a predefined task
         task_dropdown.change(
@@ -213,6 +217,7 @@ def app(share=False, use_cluster_feats=False):
                 mode,
                 dropdown,
                 instances,       # closed over
+                clustered_authors_df,
                 mystery,
                 c1,
                 c2,
@@ -222,7 +227,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, custom_embeddings_df, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
         )
 
         # Whenever the radio changes, refresh the task display to compute embeddings as well
@@ -232,6 +237,7 @@ def app(share=False, use_cluster_feats=False):
                 mode,
                 dropdown,
                 instances,       # closed over
+                clustered_authors_df,
                 mystery,
                 c1,
                 c2,
@@ -241,7 +247,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, custom_embeddings_df, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
         )
 
         # And if the user types in a custom model ID, refresh the task display to compute embeddings as well
@@ -251,6 +257,7 @@ def app(share=False, use_cluster_feats=False):
                 mode,
                 dropdown,
                 instances,       # closed over
+                clustered_authors_df,
                 mystery,
                 c1,
                 c2,
@@ -260,7 +267,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2]
+            outputs=[header, mystery, c0, c1, c2,  mystery_state, c0_state, c1_state, c2_state]
         )
 
         # ── Visualization for clusters ─────────────────────────────

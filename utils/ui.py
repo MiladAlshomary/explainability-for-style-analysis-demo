@@ -1,7 +1,7 @@
 import gradio as gr
 import pandas as pd
 from utils.visualizations import load_instance, get_instances, clean_text
-from utils.interp_space_utils import generate_style_embedding
+from utils.interp_space_utils import generate_style_embedding, append_task_authors_into_background_df
 
 
 # ── Global CSS to be prepended to every block ─────────────────────────────────
@@ -86,7 +86,7 @@ def toggle_task(mode):
     )
 
 # Update displayed texts based on mode
-def update_task_display(mode, iid, instances, mystery_file, cand1_file, cand2_file, cand3_file, true_author, model_radio, custom_model_input):
+def update_task_display(mode, iid, instances, background_df, mystery_file, cand1_file, cand2_file, cand3_file, true_author, model_radio, custom_model_input):
     if mode == "Predefined HRS Task":
         iid = int(iid.replace('Task ', ''))
         data = instances[iid]
@@ -99,8 +99,17 @@ def update_task_display(mode, iid, instances, mystery_file, cand1_file, cand2_fi
         candidate_texts = [c1_txt, c2_txt, c3_txt]
 
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, ground_truth_author)
-        embeddings_df = pd.DataFrame() #placeholder
-        # return load_instance(int(iid.replace('Task ', '')), instances)
+        
+        try:
+            # Add the task authors to the bg_author_dataframe
+            background_df = append_task_authors_into_background_df(data, background_df)
+            # Generate the new embedding of all the background_df authors
+            background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
+
+            print(f"Generated embeddings for {len(background_df)} texts using model '{custom_model_input}'")
+        except Exception as e:
+            print(f"Embedding generation failed: {e}")
+
     else:
         print(f"model_radio: {model_radio}, custom_model_input: {custom_model_input}")
         model_name = model_radio if model_radio != "Other" else custom_model_input
@@ -113,17 +122,14 @@ def update_task_display(mode, iid, instances, mystery_file, cand1_file, cand2_fi
         predicted_author = None  # Placeholder for predicted author
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, true_author)
             
-        emb_df = pd.DataFrame({
-                'role': ['mystery', 'candidate1', 'candidate2', 'candidate3'],
-                'text': [mystery_txt, c1_txt, c2_txt, c3_txt]
-            })
-        
-        try:    
-            embeddings_df = generate_style_embedding(instances, 'text', model_name)
-            print(f"Generated embeddings for {len(embeddings_df)} texts using model '{model_name}'")
-            print(embeddings_df.head())
+        try:
+            # Add the task authors to the bg_author_dataframe
+            background_df = append_task_authors_into_background_df(data, background_df)
+            # Generate the new embedding of all the background_df authors
+            background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
+
+            print(f"Generated embeddings for {len(background_df)} texts using model '{custom_model_input}'")
         except Exception as e:
-            embeddings_df = pd.DataFrame()
             print(f"Embedding generation failed: {e}")
 
         # def wrap(text):
@@ -134,7 +140,6 @@ def update_task_display(mode, iid, instances, mystery_file, cand1_file, cand2_fi
         candidate_htmls[0],
         candidate_htmls[1],
         candidate_htmls[2],
-        embeddings_df,
         mystery_txt,
         c1_txt,
         c2_txt,

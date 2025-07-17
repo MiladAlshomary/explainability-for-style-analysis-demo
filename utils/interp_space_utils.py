@@ -7,6 +7,23 @@ from collections import Counter, defaultdict
 from typing import List, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+def append_task_authors_into_background_df(data, background_df):
+    #create a dataframe of the task authors
+    task_authos_df  = pd.DataFrame([
+        {'authorID': 'Q_author', 'fullText': data['Q_fullText']},
+        {'authorID': 'a0_author', 'fullText': data['a0_fullText']},
+        {'authorID': 'a1_author', 'fullText': data['a1_fullText']},
+        {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
+                    
+    ])
+
+    #add gram2vec feats
+
+
+    #concat the two dataframes
+    background_df = pd.concat([background_df, task_authos_df])
+
+    return background_df
 
 def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, model_name: str) -> pd.DataFrame:
     """
