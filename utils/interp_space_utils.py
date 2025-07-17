@@ -25,15 +25,15 @@ def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, 
     from sentence_transformers import SentenceTransformer
     import torch
 
-    if model_name not in [
-        'gabrielloiseau/LUAR-MUD-sentence-transformers',
-        'gabrielloiseau/LUAR-CRUD-sentence-transformers',
-        'miladalsh/light-luar',
-        'AnnaWegmann/Style-Embedding',
+    # if model_name not in [
+    #     'gabrielloiseau/LUAR-MUD-sentence-transformers',
+    #     'gabrielloiseau/LUAR-CRUD-sentence-transformers',
+    #     'miladalsh/light-luar',
+    #     'AnnaWegmann/Style-Embedding',
 
-    ]:
-        print('Model is not supported')
-        return background_corpus_df
+    # ]:
+    #     print('Model is not supported')
+    #     return background_corpus_df
 
 
     print(f"Generating style embeddings using {model_name} on column '{text_clm}'...")

@@ -1,5 +1,7 @@
 import gradio as gr
-from utils.visualizations import load_instance
+import pandas as pd
+from utils.visualizations import load_instance, get_instances, clean_text
+from utils.interp_space_utils import generate_style_embedding
 
 
 # ── Global CSS to be prepended to every block ─────────────────────────────────
@@ -65,6 +67,16 @@ def instruction_callout(text: str) -> str:
     """
     return styled_html(callout)
 
+def read_txt(f):
+    if not f:
+        return ""
+    path = f.name if hasattr(f, 'name') else f
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            return fh.read().strip()
+    except Exception:
+        return "(Could not read file)"
+
 # Toggle which input UI is visible
 def toggle_task(mode):
     print(mode)
@@ -74,13 +86,117 @@ def toggle_task(mode):
     )
 
 # Update displayed texts based on mode
-def update_task_display(mode, iid, mystery_txt, cand1, cand2, cand3):
+def update_task_display(mode, iid, instances, mystery_file, cand1_file, cand2_file, cand3_file, true_author, model_radio, custom_model_input):
     if mode == "Predefined HRS Task":
-        return load_instance(int(iid.replace('Task ', '')), instances)
+        iid = int(iid.replace('Task ', ''))
+        data = instances[iid]
+        predicted_author = data['latent_rank'][0]
+        ground_truth_author = data['gt_idx']
+        mystery_txt = data['Q_fullText']
+        c1_txt = data['a0_fullText']
+        c2_txt = data['a1_fullText']
+        c3_txt = data['a2_fullText']
+        candidate_texts = [c1_txt, c2_txt, c3_txt]
+
+        header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, ground_truth_author)
+        embeddings_df = pd.DataFrame() #placeholder
+        # return load_instance(int(iid.replace('Task ', '')), instances)
     else:
+        print(f"model_radio: {model_radio}, custom_model_input: {custom_model_input}")
+        model_name = model_radio if model_radio != "Other" else custom_model_input
         header_html = "<h3>Custom Uploaded Task</h3>"
-        def wrap(text):
-            return f"<div style='padding:0.5em; border:1px solid #ddd; margin:0.2em 0;'>{text}</div>"
-        mystery_html = wrap(mystery_txt)
-        cand_htmls = [wrap(t) for t in (cand1, cand2, cand3)]
-        return [header_html, mystery_html] + cand_htmls
+        mystery_txt = read_txt(mystery_file)
+        c1_txt = read_txt(cand1_file)
+        c2_txt = read_txt(cand2_file)
+        c3_txt = read_txt(cand3_file)
+        candidate_texts = [c1_txt, c2_txt, c3_txt]
+        predicted_author = None  # Placeholder for predicted author
+        header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, true_author)
+            
+        emb_df = pd.DataFrame({
+                'role': ['mystery', 'candidate1', 'candidate2', 'candidate3'],
+                'text': [mystery_txt, c1_txt, c2_txt, c3_txt]
+            })
+        
+        try:    
+            embeddings_df = generate_style_embedding(instances, 'text', model_name)
+            print(f"Generated embeddings for {len(embeddings_df)} texts using model '{model_name}'")
+            print(embeddings_df.head())
+        except Exception as e:
+            embeddings_df = pd.DataFrame()
+            print(f"Embedding generation failed: {e}")
+
+        # def wrap(text):
+        #     return f"<div style='padding:0.5em; border:1px solid #ddd; margin:0.2em 0; white-space: pre-wrap;'>{text}</div>"
+    return [
+        header_html,
+        mystery_html,
+        candidate_htmls[0],
+        candidate_htmls[1],
+        candidate_htmls[2],
+        embeddings_df,
+        mystery_txt,
+        c1_txt,
+        c2_txt,
+        c3_txt
+    ]
+
+def task_HTML(mystery_text, candidate_texts, predicted_author, ground_truth_author):
+    header_html = f"""
+    <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+      <h3>Here’s the mystery passage alongside three candidate texts—look for the green highlight to see the predicted author.</h3>
+    </div>
+    """
+    mystery_text = clean_text(mystery_text)
+    mystery_html = f"""
+    <div style="
+            border: 2px solid #ff5722;      /* accent border */
+            background: #fff3e0;            /* very light matching wash */
+            border-radius: 6px;
+            padding: 1em;
+            margin-bottom: 1em;
+        ">
+        <h3 style="margin-top:0; color:#bf360c;">Mystery Author</h3>
+        <p>{clean_text(mystery_text)}</p>
+    </div>
+    """
+
+    # Candidate boxes
+    candidate_htmls = []
+    for i in range(3):
+        text = candidate_texts[i]
+        title = f"Candidate {i+1}"
+        extra_style = ""
+
+        if ground_truth_author == i:
+            if ground_truth_author != predicted_author: # highlight the true author only if its different than the predictd one
+                title += " (True Author)"
+                extra_style = (
+                    "border: 2px solid #ff5722; "
+                    "background: #fff3e0; " 
+                    "padding:10px; "
+                )
+
+        
+        if predicted_author == i:
+            if predicted_author == ground_truth_author:
+                title += " (Predicted and True Author)"
+            else:
+                title += " (Predicted Author)"
+            extra_style = (
+                "border:2px solid #228B22; "        # dark green border
+                "background-color: #e6ffe6; "       # light green fill
+                "padding:10px; "
+            )
+            
+
+        candidate_htmls.append(f"""
+        <div style="border:1px solid #ccc; padding:10px; {extra_style}">
+          <h4>{title}</h4>
+          <p>{clean_text(text)}</p>
+        </div>
+        """)
+    return header_html, mystery_html, candidate_htmls
+
+def toggle_custom_model(choice):
+    return gr.update(visible=(choice == "Other"))

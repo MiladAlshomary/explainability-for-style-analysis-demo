@@ -264,9 +264,8 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
-def visualize_clusters_plotly(iid, cfg, instances):
+def visualize_clusters_plotly(iid, cfg, instances, model_choice, task_mode):
     print("Generating cluster visualization")
-
     iid = int(iid)
     interp      = load_interp_space(cfg)
     dim2lat     = interp['dimension_to_latent']

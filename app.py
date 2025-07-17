@@ -100,38 +100,29 @@ def app(share=False, use_cluster_feats=False):
                     """
             )
 
-
-        # ── Dropdown and to select instance ─────────────────────────────
-        # Load default instance values for display
-        # default_outputs = load_instance(0, instances)
-        # gr.HTML("""
-        #             <div style="
-        #                 font-size: 1.3em;
-        #                 font-weight: 600;
-        #                 margin-bottom: 0.5em;
-        #             ">
-        #                 Pick a pre-defined task to investigate (a mystery text and its three candidate authors)
-        #             </div>
-        #             """)
-
-        # task_dropdown = gr.Dropdown(
-        #     choices=[f"Task {i}" for i in instance_ids],
-        #     value=f"Task {instance_ids[0]}",
-        #     label="Choose which mystery document to explain",
-        # )
-
-
-        # # ── HTML outputs for author texts… ─────────────────────────────
-        # header  = gr.HTML(value=default_outputs[0])
-        # mystery = gr.HTML(value=default_outputs[1])
-        # with gr.Row():
-        #     c0, c1, c2 = gr.HTML(value=default_outputs[2]), gr.HTML(value=default_outputs[3]), gr.HTML(value=default_outputs[4])
-
-        # task_dropdown.change(
-        #     lambda iid: load_instance(int(iid.replace('Task ','')), instances),
-        #     inputs=task_dropdown,
-        #     outputs=[header, mystery, c0, c1, c2]
-        # )    
+        # ── Model Selection ─────────────────────────────────
+        model_radio = gr.Radio(
+            choices=[
+                'rrivera1849/LUAR-MUD',
+                'Other'
+            ],
+            value='rrivera1849/LUAR-MUD',
+            label='Choose a Model to inspect'
+        )
+        print(f"Model choices: {model_radio.choices}")
+        print(f"Model default: {model_radio.value}")
+        custom_model = gr.Textbox(
+            label='Custom Model ID',
+            placeholder='Enter your Hugging Face Model ID here',
+            visible=False,
+            interactive=True
+        )
+        # Show the textbox when 'Other' is selected
+        model_radio.change(
+            fn=toggle_custom_model,
+            inputs=[model_radio],
+            outputs=[custom_model]
+        )
 
         # ── Task Source Selection ─────────────────────────────────
         task_mode = gr.Radio(
@@ -165,24 +156,25 @@ def app(share=False, use_cluster_feats=False):
                         Upload your own task
                     </div>
                     """)
-                mystery_input = gr.Textbox(
-                    lines=8,
-                    placeholder="Paste your mystery author text here…",
-                    label="Mystery Author Text"
-                )
-                candidate1 = gr.Textbox(lines=3, label="Candidate Author Text 1")
-                candidate2 = gr.Textbox(lines=3, label="Candidate Author Text 2")
-                candidate3 = gr.Textbox(lines=3, label="Candidate Author Text 3")
+                mystery_input   = gr.File(label="Mystery (.txt)", file_types=['.txt'])
+                candidate1 = gr.File(label="Candidate1 (.txt)", file_types=['.txt'])
+                candidate2 = gr.File(label="Candidate2 (.txt)", file_types=['.txt'])
+                candidate3 = gr.File(label="Candidate3 (.txt)", file_types=['.txt'])
 
         # ── HTML outputs for author texts ───────────────────────────
         default_outputs = load_instance(0, instances)
         header  = gr.HTML(value=default_outputs[0])
         mystery = gr.HTML(value=default_outputs[1])
+        mystery_state = gr.State(value=default_outputs[1])  # Store unformatted mystery text for later use
         with gr.Row():
             c0 = gr.HTML(value=default_outputs[2])
             c1 = gr.HTML(value=default_outputs[3])
             c2 = gr.HTML(value=default_outputs[4])
-
+            c0_state = gr.State(value=default_outputs[2])  # Store unformatted candidate 1 text for later use
+            c1_state = gr.State(value=default_outputs[3])  # Store unformatted candidate 2 text for later use
+            c2_state = gr.State(value=default_outputs[4])  # Store unformatted candidate 3 text for later use
+        
+        custom_embeddings_df = gr.State()
         # ── Wire up callbacks ─────────────────────────────────────
         task_mode.change(
             fn=toggle_task,
@@ -191,9 +183,21 @@ def app(share=False, use_cluster_feats=False):
         )
         # Update displayed texts for both modes
         task_mode.change(
-            fn=update_task_display,
-            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3],
-            outputs=[header, mystery, c0, c1, c2]
+            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+            update_task_display(
+                mode,
+                dropdown,
+                instances,       # closed over
+                mystery,
+                c1,
+                c2,
+                c3,
+                None,            # true_author placeholder
+                model_radio,
+                custom_model_input
+            ),
+            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+            outputs=[header, mystery, c0, c1, c2, custom_embeddings_df, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
         )
         # When selecting a predefined task
         task_dropdown.change(
@@ -204,10 +208,60 @@ def app(share=False, use_cluster_feats=False):
         # When user edits custom fields
         for inp in [mystery_input, candidate1, candidate2, candidate3]:
             inp.change(
-                fn=update_task_display,
-                inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3],
-                outputs=[header, mystery, c0, c1, c2]
-            )
+            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+            update_task_display(
+                mode,
+                dropdown,
+                instances,       # closed over
+                mystery,
+                c1,
+                c2,
+                c3,
+                None,            # true_author placeholder
+                model_radio,
+                custom_model_input
+            ),
+            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+            outputs=[header, mystery, c0, c1, c2, custom_embeddings_df, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+        )
+
+        # Whenever the radio changes, refresh the task display to compute embeddings as well
+        model_radio.change(
+            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+            update_task_display(
+                mode,
+                dropdown,
+                instances,       # closed over
+                mystery,
+                c1,
+                c2,
+                c3,
+                None,            # true_author placeholder
+                model_radio,
+                custom_model_input
+            ),
+            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+            outputs=[header, mystery, c0, c1, c2, custom_embeddings_df, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+        )
+
+        # And if the user types in a custom model ID, refresh the task display to compute embeddings as well
+        custom_model.change(
+            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+            update_task_display(
+                mode,
+                dropdown,
+                instances,       # closed over
+                mystery,
+                c1,
+                c2,
+                c3,
+                None,            # true_author placeholder
+                model_radio,
+                custom_model_input
+            ),
+            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+            outputs=[header, mystery, c0, c1, c2]
+        )
 
         # ── Visualization for clusters ─────────────────────────────
         gr.HTML(instruction_callout("Run visualization to see which author cluster contains the mystery document."))
@@ -344,10 +398,10 @@ def app(share=False, use_cluster_feats=False):
 
         # ── Visualization button click ───────────────────────────────
         run_btn.click(
-            fn=lambda iid: visualize_clusters_plotly(
-                int(iid.replace('Task ','')), cfg, instances
+            fn=lambda iid, model_radio, task_mode: visualize_clusters_plotly(
+                int(iid.replace('Task ','')), cfg, instances, model_radio, task_mode
             ),
-            inputs=[task_dropdown],
+            inputs=[task_dropdown, model_radio, task_mode],
             outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
         )
         
@@ -417,10 +471,10 @@ def app(share=False, use_cluster_feats=False):
 
 
         combined_btn.click(
-            fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v: show_combined_spans_all(
-                client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v
+            fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v, task_mode, mystery_state, c0_state, c1_state, c2_state: show_combined_spans_all(
+                client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v, task_mode, mystery_state, c0_state, c1_state, c2_state
             ),
-            inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb],
+            inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb, task_mode, mystery_state, c0_state, c1_state, c2_state],
             outputs=[combined_html]
         )
         # mapping -->
