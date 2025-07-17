@@ -34,11 +34,12 @@ def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, 
     # ]:
     #     print('Model is not supported')
     #     return background_corpus_df
-
-
     print(f"Generating style embeddings using {model_name} on column '{text_clm}'...")
 
-    model = SentenceTransformer(model_name)
+    if model_name == 'rrivera1849/LUAR-MUD':
+        model = SentenceTransformer(model_name, trust_remote_code=True)
+    else:
+        model = SentenceTransformer(model_name)
     embedding_dim = model.get_sentence_embedding_dimension()
 
     # Heuristic to check if the column contains lists of strings by checking the first valid item.
