@@ -260,7 +260,8 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
     return (
         gr.update(choices=llm_feats, value=llm_feats[0]),
         gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
-        llm_feats
+        llm_feats,
+        visible_authors
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 

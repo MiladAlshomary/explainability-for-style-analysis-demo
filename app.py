@@ -249,7 +249,9 @@ def app(share=False, use_cluster_feats=False):
                     </div>
                     """)
                 features_rb = gr.Radio(choices=[], label="LLM-derived style features for this cluster")#, label="Features from the cluster closest to the Mystery Author", info="LLM-derived style features for this cluster")
-                feature_list_state = gr.State() 
+                feature_list_state = gr.State()
+                visible_backgournd_authors = gr.State()
+
 
             # ── Gram2Vec Features Column ─────────────────────────────
             with gr.Column(scale=1, min_width=0):
@@ -289,7 +291,7 @@ def app(share=False, use_cluster_feats=False):
             axis_ranges.change(
                 fn=handle_zoom, 
                 inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df], 
-                outputs=[features_rb, gram2vec_rb , feature_list_state]
+                outputs=[features_rb, gram2vec_rb , feature_list_state, visible_backgournd_authors]
             )
 
 
@@ -340,13 +342,22 @@ def app(share=False, use_cluster_feats=False):
         # print(f"in app: sel_feat_llm={features_rb.value}")
 
 
+        # combined_btn.click(
+        #     fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v: show_combined_spans_all(
+        #         client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v
+        #     ),
+        #     inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb],
+        #     outputs=[combined_html]
+        # )
         combined_btn.click(
-            fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v: show_combined_spans_all(
-                client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v
+            fn=lambda sel_feat_llm, all_feats, sel_feat_g2v, bg_authors_df, visible_backgournd_authors: show_combined_spans_for_bg_authors(
+                client, all_feats, bg_authors_df, visible_backgournd_authors, sel_feat_llm, sel_feat_g2v
             ),
-            inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb],
+            inputs=[features_rb, feature_list_state, gram2vec_rb, bg_authors_df, visible_backgournd_authors],
             outputs=[combined_html]
         )
+    
+    
         # mapping -->
         # iid = task_dropdown.value
         # sel_feat_llm = features_rb.value
@@ -359,4 +370,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_cluster_feats", action="store_true", help="Use cluster-based selection for features")
     args = parser.parse_args()
-    app(share=True, use_cluster_feats=args.use_cluster_feats)
+    app(share=False, use_cluster_feats=args.use_cluster_feats)
