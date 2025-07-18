@@ -4,6 +4,7 @@ import json
 from utils.visualizations import *
 from utils.llm_feat_utils import *
 from utils.gram2vec_feat_utils import *
+from utils.interp_space_utils import *
 from utils.ui import *
 
 import yaml
@@ -31,7 +32,8 @@ def app(share=False, use_cluster_feats=False):
 
     interp      = load_interp_space(cfg)
     clustered_authors_df = interp['clustered_authors_df']
-
+    task_authors_df = instance_to_df(instances[0]) #default task is task number 0
+    
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
         # ── Big Centered Title ──────────────────────────────────────────
         gr.HTML(styled_block("""

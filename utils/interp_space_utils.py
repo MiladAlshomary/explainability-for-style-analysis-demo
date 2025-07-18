@@ -7,23 +7,24 @@ from collections import Counter, defaultdict
 from typing import List, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-def append_task_authors_into_background_df(data, background_df):
+def get_task_authors_from_background_df(background_df):
+    task_authors_df = background_df[background_df.authorID.isin(["Q_author", "a0_author", "a1_author", "a2_author"])]
+    return task_authors_df
+
+def instance_to_df(instance):
     #create a dataframe of the task authors
     task_authos_df  = pd.DataFrame([
-        {'authorID': 'Q_author', 'fullText': data['Q_fullText']},
-        {'authorID': 'a0_author', 'fullText': data['a0_fullText']},
-        {'authorID': 'a1_author', 'fullText': data['a1_fullText']},
-        {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
+        {'authorID': 'Q_author', 'fullText': instance['Q_fullText']},
+        {'authorID': 'a0_author', 'fullText': instance['a0_fullText']},
+        {'authorID': 'a1_author', 'fullText': instance['a1_fullText']},
+        {'authorID': 'a2_author', 'fullText': instance['a2_fullText']}
                     
     ])
 
-    #add gram2vec feats
+    #TODO add gram2vec feats
 
+    return task_authos_df
 
-    #concat the two dataframes
-    background_df = pd.concat([background_df, task_authos_df])
-
-    return background_df
 
 def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, model_name: str) -> pd.DataFrame:
     """
@@ -42,15 +43,16 @@ def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, 
     from sentence_transformers import SentenceTransformer
     import torch
 
-    # if model_name not in [
-    #     'gabrielloiseau/LUAR-MUD-sentence-transformers',
-    #     'gabrielloiseau/LUAR-CRUD-sentence-transformers',
-    #     'miladalsh/light-luar',
-    #     'AnnaWegmann/Style-Embedding',
+    if model_name not in [
+        'gabrielloiseau/LUAR-MUD-sentence-transformers',
+        'gabrielloiseau/LUAR-CRUD-sentence-transformers',
+        'miladalsh/light-luar',
+        'AnnaWegmann/Style-Embedding',
 
-    # ]:
-    #     print('Model is not supported')
-    #     return background_corpus_df
+    ]:
+        print('Model is not supported')
+        return background_corpus_df
+    
     print(f"Generating style embeddings using {model_name} on column '{text_clm}'...")
 
     if model_name == 'rrivera1849/LUAR-MUD':

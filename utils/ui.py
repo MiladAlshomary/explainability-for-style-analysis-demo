@@ -1,7 +1,7 @@
 import gradio as gr
 import pandas as pd
 from utils.visualizations import load_instance, get_instances, clean_text
-from utils.interp_space_utils import generate_style_embedding, append_task_authors_into_background_df
+from utils.interp_space_utils import generate_style_embedding
 
 
 # ── Global CSS to be prepended to every block ─────────────────────────────────
@@ -101,8 +101,16 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, ground_truth_author)
         
         try:
-            # Add the task authors to the bg_author_dataframe
-            background_df = append_task_authors_into_background_df(data, background_df)
+            #create a dataframe of the task authors
+            task_authos_df  = pd.DataFrame([
+                {'authorID': 'Q_author', 'fullText': data['Q_fullText']},
+                {'authorID': 'a0_author', 'fullText': data['a0_fullText']},
+                {'authorID': 'a1_author', 'fullText': data['a1_fullText']},
+                {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
+                            
+            ])
+            task_authos_df = generate_style_embedding(task_authos_df, 'fullText', custom_model_input)
+
             # Generate the new embedding of all the background_df authors
             background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
 
@@ -123,8 +131,16 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, true_author)
             
         try:
-            # Add the task authors to the bg_author_dataframe
-            background_df = append_task_authors_into_background_df(data, background_df)
+            #create a dataframe of the task authors
+            task_authos_df  = pd.DataFrame([
+                {'authorID': 'Q_author', 'fullText': data['Q_fullText']},
+                {'authorID': 'a0_author', 'fullText': data['a0_fullText']},
+                {'authorID': 'a1_author', 'fullText': data['a1_fullText']},
+                {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
+                            
+            ])
+            task_authos_df = generate_style_embedding(task_authos_df, 'fullText', custom_model_input)
+
             # Generate the new embedding of all the background_df authors
             background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
 
