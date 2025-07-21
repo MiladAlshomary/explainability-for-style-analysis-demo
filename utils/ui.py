@@ -1,7 +1,7 @@
 import gradio as gr
 import pandas as pd
 from utils.visualizations import load_instance, get_instances, clean_text
-from utils.interp_space_utils import generate_style_embedding
+from utils.interp_space_utils import generate_style_embedding, cached_generate_style_embedding
 
 
 # ── Global CSS to be prepended to every block ─────────────────────────────────
@@ -124,9 +124,15 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         ])
     try:
         # Generate the embeddings for the custom task authors
-        task_authors_df = generate_style_embedding(task_authors_df, 'fullText', model_name)
+        # task_authors_df = generate_style_embedding(task_authors_df, 'fullText', model_name)
+        # # Generate the new embedding of all the background_df authors
+        # background_df = generate_style_embedding(background_df, 'fullText', model_name)
+        # print(f"Generated embeddings for {len(background_df)} texts using model '{model_name}'")
+        print(f"Generating embeddings for {model_name} on task authors")
+        task_authors_df = cached_generate_style_embedding(task_authors_df, 'fullText', model_name)
         # Generate the new embedding of all the background_df authors
-        background_df = generate_style_embedding(background_df, 'fullText', model_name)
+        print(f"Generating embeddings for {model_name} on background corpus")
+        background_df = cached_generate_style_embedding(background_df, 'fullText', model_name)
         print(f"Generated embeddings for {len(background_df)} texts using model '{model_name}'")
     except Exception as e:
         print(f"Embedding generation failed: {e}")
