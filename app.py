@@ -185,16 +185,6 @@ def app(share=False, use_cluster_feats=False):
             c0_state = gr.State()  # Store unformatted candidate 1 text for later use
             c1_state = gr.State()  # Store unformatted candidate 2 text for later use
             c2_state = gr.State()  # Store unformatted candidate 3 text for later use
-        # header  = gr.HTML(value=default_outputs[0])
-        # mystery = gr.HTML(value=default_outputs[1])
-        # mystery_state = gr.State(value=default_outputs[1])  # Store unformatted mystery text for later use
-        # with gr.Row():
-        #     c0 = gr.HTML(value=default_outputs[2])
-        #     c1 = gr.HTML(value=default_outputs[3])
-        #     c2 = gr.HTML(value=default_outputs[4])
-        #     c0_state = gr.State(value=default_outputs[2])  # Store unformatted candidate 1 text for later use
-        #     c1_state = gr.State(value=default_outputs[3])  # Store unformatted candidate 2 text for later use
-        #     c2_state = gr.State(value=default_outputs[4])  # Store unformatted candidate 3 text for later use
         # ── State to hold embeddings DataFrame ─────────────────────
         task_authors_embeddings_df = gr.State()  # Store embeddings of task authors
         background_authors_embeddings_df = gr.State()  # Store background authors DataFrame
