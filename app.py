@@ -97,11 +97,13 @@ def app(share=False, use_cluster_feats=False):
         # ── Step-by-Step Guided Panel ──
         with gr.Accordion("📝 How to Use", open=True):
             gr.Markdown("""
-                    1. **Select** a pre-defined task from the dropdown
-                    2. Click **Run Visualization** to see where the authors are located in the AA model's space
-                    3. Pick an **LLM feature** to highlight in yellow  
-                    4. Pick a **Gram2Vec feature** to highlight in blue  
-                    5. Click **Show Combined Spans** to compare side-by-side
+                    1. **Select** a model and a task source (pre-defined or custom)
+                    2. Click **Load Task & Generate Embeddings** to load the task and generate embeddings
+                    3. **Run Visualization** to see the mystery author and candidates in the AA model's latent space
+                    4. **Zoom** into the visualization to select a cluster of background authors
+                    5. Pick an **LLM feature** to highlight in yellow  
+                    6. Pick a **Gram2Vec feature** to highlight in blue  
+                    7. Click **Show Combined Spans** to compare side-by-side
                     """
             )
 
@@ -170,6 +172,7 @@ def app(share=False, use_cluster_feats=False):
                 candidate3 = gr.File(label="Candidate3 (.txt)", file_types=['.txt'])
         
         # ── Load Task Button ─────────────────────────────────────
+        gr.HTML(instruction_callout("Click the button below to load the tasks and generate embeddings using selected model."))
         load_button = gr.Button("Load Task & Generate Embeddings")
 
         # ── HTML outputs for author texts ───────────────────────────
@@ -343,13 +346,6 @@ def app(share=False, use_cluster_feats=False):
                 gram2vec_state = gr.State()
 
         # ── Visualization button click ───────────────────────────────
-        # run_btn.click(
-        #     fn=lambda iid, model_radio, task_mode: visualize_clusters_plotly(
-        #         int(iid.replace('Task ','')), cfg, instances, model_radio, task_mode
-        #     ),
-        #     inputs=[task_dropdown, model_radio, task_mode],
-        #     outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
-        # )
         run_btn.click(
             fn=lambda iid, model_radio, custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df: visualize_clusters_plotly(
                 int(iid.replace('Task ','')), cfg, instances, model_radio,
