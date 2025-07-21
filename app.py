@@ -108,10 +108,13 @@ def app(share=False, use_cluster_feats=False):
         # ── Model Selection ─────────────────────────────────
         model_radio = gr.Radio(
             choices=[
-                'rrivera1849/LUAR-MUD',
+                'gabrielloiseau/LUAR-MUD-sentence-transformers',
+                'gabrielloiseau/LUAR-CRUD-sentence-transformers',
+                'miladalsh/light-luar',
+                'AnnaWegmann/Style-Embedding',
                 'Other'
             ],
-            value='rrivera1849/LUAR-MUD',
+            value='gabrielloiseau/LUAR-MUD-sentence-transformers',
             label='Choose a Model to inspect'
         )
         print(f"Model choices: {model_radio.choices}")
@@ -178,8 +181,9 @@ def app(share=False, use_cluster_feats=False):
             c0_state = gr.State(value=default_outputs[2])  # Store unformatted candidate 1 text for later use
             c1_state = gr.State(value=default_outputs[3])  # Store unformatted candidate 2 text for later use
             c2_state = gr.State(value=default_outputs[4])  # Store unformatted candidate 3 text for later use
-        
-        #custom_embeddings_df = gr.State()
+        # ── State to hold embeddings DataFrame ─────────────────────
+        task_authors_embeddings_df = gr.State()  # Store embeddings of task authors
+        background_authors_embeddings_df = gr.State()  # Store background authors DataFrame
         # ── Wire up callbacks ─────────────────────────────────────
         task_mode.change(
             fn=toggle_task,
@@ -203,7 +207,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
         )
         # When selecting a predefined task
         task_dropdown.change(
@@ -229,7 +233,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
         )
 
         # Whenever the radio changes, refresh the task display to compute embeddings as well
@@ -249,7 +253,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state]  # embeddings_df is a placeholder for now
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
         )
 
         # And if the user types in a custom model ID, refresh the task display to compute embeddings as well
@@ -269,7 +273,7 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2,  mystery_state, c0_state, c1_state, c2_state]
+            outputs=[header, mystery, c0, c1, c2,  mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]
         )
 
         # ── Visualization for clusters ─────────────────────────────

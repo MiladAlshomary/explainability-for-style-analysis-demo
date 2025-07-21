@@ -99,25 +99,13 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         candidate_texts = [c1_txt, c2_txt, c3_txt]
 
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, ground_truth_author)
-        
-        try:
-            #create a dataframe of the task authors
-            task_authos_df  = pd.DataFrame([
-                {'authorID': 'Q_author', 'fullText': data['Q_fullText']},
-                {'authorID': 'a0_author', 'fullText': data['a0_fullText']},
-                {'authorID': 'a1_author', 'fullText': data['a1_fullText']},
-                {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
-                            
-            ])
-            task_authos_df = generate_style_embedding(task_authos_df, 'fullText', custom_model_input)
-
-            # Generate the new embedding of all the background_df authors
-            background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
-
-            print(f"Generated embeddings for {len(background_df)} texts using model '{custom_model_input}'")
-        except Exception as e:
-            print(f"Embedding generation failed: {e}")
-
+        #create a dataframe of the task authors
+        task_authors_df  = pd.DataFrame([
+            {'authorID': 'Q_author', 'fullText': data['Q_fullText']},
+            {'authorID': 'a0_author', 'fullText': data['a0_fullText']},
+            {'authorID': 'a1_author', 'fullText': data['a1_fullText']},
+            {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
+        ])
     else:
         print(f"model_radio: {model_radio}, custom_model_input: {custom_model_input}")
         model_name = model_radio if model_radio != "Other" else custom_model_input
@@ -129,27 +117,21 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         candidate_texts = [c1_txt, c2_txt, c3_txt]
         predicted_author = None  # Placeholder for predicted author
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, true_author)
-            
-        try:
-            #create a dataframe of the task authors
-            task_authos_df  = pd.DataFrame([
-                {'authorID': 'Q_author', 'fullText': data['Q_fullText']},
-                {'authorID': 'a0_author', 'fullText': data['a0_fullText']},
-                {'authorID': 'a1_author', 'fullText': data['a1_fullText']},
-                {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
-                            
-            ])
-            task_authos_df = generate_style_embedding(task_authos_df, 'fullText', custom_model_input)
-
-            # Generate the new embedding of all the background_df authors
-            background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
-
-            print(f"Generated embeddings for {len(background_df)} texts using model '{custom_model_input}'")
-        except Exception as e:
-            print(f"Embedding generation failed: {e}")
-
-        # def wrap(text):
-        #     return f"<div style='padding:0.5em; border:1px solid #ddd; margin:0.2em 0; white-space: pre-wrap;'>{text}</div>"
+        task_authors_df  = pd.DataFrame([
+            {'authorID': 'Q_author', 'fullText': mystery_txt},
+            {'authorID': 'a0_author', 'fullText': c1_txt},
+            {'authorID': 'a1_author', 'fullText': c2_txt},
+            {'authorID': 'a2_author', 'fullText': c3_txt}
+        ])
+    try:
+        # Generate the embeddings for the custom task authors
+        task_authors_df = generate_style_embedding(task_authors_df, 'fullText', custom_model_input)
+        # Generate the new embedding of all the background_df authors
+        background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
+        print(f"Generated embeddings for {len(background_df)} texts using model '{custom_model_input}'")
+    except Exception as e:
+        print(f"Embedding generation failed: {e}")
+    
     return [
         header_html,
         mystery_html,
@@ -159,7 +141,9 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         mystery_txt,
         c1_txt,
         c2_txt,
-        c3_txt
+        c3_txt,
+        task_authors_df,
+        background_df,
     ]
 
 def task_HTML(mystery_text, candidate_texts, predicted_author, ground_truth_author):
