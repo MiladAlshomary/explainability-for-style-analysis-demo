@@ -343,12 +343,20 @@ def app(share=False, use_cluster_feats=False):
                 gram2vec_state = gr.State()
 
         # ── Visualization button click ───────────────────────────────
+        # run_btn.click(
+        #     fn=lambda iid, model_radio, task_mode: visualize_clusters_plotly(
+        #         int(iid.replace('Task ','')), cfg, instances, model_radio, task_mode
+        #     ),
+        #     inputs=[task_dropdown, model_radio, task_mode],
+        #     outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
+        # )
         run_btn.click(
-            fn=lambda iid, model_radio, task_mode: visualize_clusters_plotly(
-                int(iid.replace('Task ','')), cfg, instances, model_radio, task_mode
+            fn=lambda iid, model_radio, custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df: visualize_clusters_plotly(
+                int(iid.replace('Task ','')), cfg, instances, model_radio,
+                custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df
             ),
-            inputs=[task_dropdown, model_radio, task_mode],
-            outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
+            inputs=[task_dropdown, model_radio, custom_model, task_authors_embeddings_df, background_authors_embeddings_df],
+            outputs=[plot, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
         )
         
         # Populate feature list based on selection. 
