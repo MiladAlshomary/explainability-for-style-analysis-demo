@@ -168,31 +168,43 @@ def app(share=False, use_cluster_feats=False):
                 candidate1 = gr.File(label="Candidate1 (.txt)", file_types=['.txt'])
                 candidate2 = gr.File(label="Candidate2 (.txt)", file_types=['.txt'])
                 candidate3 = gr.File(label="Candidate3 (.txt)", file_types=['.txt'])
+        
+        # ── Load Task Button ─────────────────────────────────────
+        load_button = gr.Button("Load Task & Generate Embeddings")
 
         # ── HTML outputs for author texts ───────────────────────────
         default_outputs = load_instance(0, instances)
-        header  = gr.HTML(value=default_outputs[0])
-        mystery = gr.HTML(value=default_outputs[1])
-        mystery_state = gr.State(value=default_outputs[1])  # Store unformatted mystery text for later use
+        #dont need defaults since they are loaded only on click of the load button
+        header  = gr.HTML()
+        mystery = gr.HTML()
+        mystery_state = gr.State()  # Store unformatted mystery text for later use
         with gr.Row():
-            c0 = gr.HTML(value=default_outputs[2])
-            c1 = gr.HTML(value=default_outputs[3])
-            c2 = gr.HTML(value=default_outputs[4])
-            c0_state = gr.State(value=default_outputs[2])  # Store unformatted candidate 1 text for later use
-            c1_state = gr.State(value=default_outputs[3])  # Store unformatted candidate 2 text for later use
-            c2_state = gr.State(value=default_outputs[4])  # Store unformatted candidate 3 text for later use
+            c0 = gr.HTML()
+            c1 = gr.HTML()
+            c2 = gr.HTML()
+            c0_state = gr.State()  # Store unformatted candidate 1 text for later use
+            c1_state = gr.State()  # Store unformatted candidate 2 text for later use
+            c2_state = gr.State()  # Store unformatted candidate 3 text for later use
+        # header  = gr.HTML(value=default_outputs[0])
+        # mystery = gr.HTML(value=default_outputs[1])
+        # mystery_state = gr.State(value=default_outputs[1])  # Store unformatted mystery text for later use
+        # with gr.Row():
+        #     c0 = gr.HTML(value=default_outputs[2])
+        #     c1 = gr.HTML(value=default_outputs[3])
+        #     c2 = gr.HTML(value=default_outputs[4])
+        #     c0_state = gr.State(value=default_outputs[2])  # Store unformatted candidate 1 text for later use
+        #     c1_state = gr.State(value=default_outputs[3])  # Store unformatted candidate 2 text for later use
+        #     c2_state = gr.State(value=default_outputs[4])  # Store unformatted candidate 3 text for later use
         # ── State to hold embeddings DataFrame ─────────────────────
         task_authors_embeddings_df = gr.State()  # Store embeddings of task authors
         background_authors_embeddings_df = gr.State()  # Store background authors DataFrame
-        
-        # ── Wire up callbacks ─────────────────────────────────────
         task_mode.change(
             fn=toggle_task,
             inputs=[task_mode],
             outputs=[predefined_container, custom_container]
         )
-        # Update displayed texts for both modes
-        task_mode.change(
+        # ── Wire call to load task and generate embeddings once load button is clicked ───────────────────
+        load_button.click(
             fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
             update_task_display(
                 mode,
@@ -209,73 +221,95 @@ def app(share=False, use_cluster_feats=False):
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
             outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
-        )
-        # When selecting a predefined task
-        task_dropdown.change(
-            fn=lambda iid: load_instance(int(iid.replace('Task ', '')), instances),
-            inputs=[task_dropdown],
-            outputs=[header, mystery, c0, c1, c2]
-        )
-        # When user edits custom fields
-        for inp in [mystery_input, candidate1, candidate2, candidate3]:
-            inp.change(
-            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
-            update_task_display(
-                mode,
-                dropdown,
-                instances,       # closed over
-                clustered_authors_df,
-                mystery,
-                c1,
-                c2,
-                c3,
-                None,            # true_author placeholder
-                model_radio,
-                custom_model_input
-            ),
-            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
+        
         )
 
-        # Whenever the radio changes, refresh the task display to compute embeddings as well
-        model_radio.change(
-            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
-            update_task_display(
-                mode,
-                dropdown,
-                instances,       # closed over
-                clustered_authors_df,
-                mystery,
-                c1,
-                c2,
-                c3,
-                None,            # true_author placeholder
-                model_radio,
-                custom_model_input
-            ),
-            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
-        )
+        # # ── Wire up callbacks ─────────────────────────────────────
+        # # Update displayed texts for both modes
+        # task_mode.change(
+        #     fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+        #     update_task_display(
+        #         mode,
+        #         dropdown,
+        #         instances,       # closed over
+        #         clustered_authors_df,
+        #         mystery,
+        #         c1,
+        #         c2,
+        #         c3,
+        #         None,            # true_author placeholder
+        #         model_radio,
+        #         custom_model_input
+        #     ),
+        #     inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+        #     outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
+        # )
+        # # When selecting a predefined task
+        # task_dropdown.change(
+        #     fn=lambda iid: load_instance(int(iid.replace('Task ', '')), instances),
+        #     inputs=[task_dropdown],
+        #     outputs=[header, mystery, c0, c1, c2]
+        # )
+        # # When user edits custom fields
+        # for inp in [mystery_input, candidate1, candidate2, candidate3]:
+        #     inp.change(
+        #     fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+        #     update_task_display(
+        #         mode,
+        #         dropdown,
+        #         instances,       # closed over
+        #         clustered_authors_df,
+        #         mystery,
+        #         c1,
+        #         c2,
+        #         c3,
+        #         None,            # true_author placeholder
+        #         model_radio,
+        #         custom_model_input
+        #     ),
+        #     inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+        #     outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
+        # )
 
-        # And if the user types in a custom model ID, refresh the task display to compute embeddings as well
-        custom_model.change(
-            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
-            update_task_display(
-                mode,
-                dropdown,
-                instances,       # closed over
-                clustered_authors_df,
-                mystery,
-                c1,
-                c2,
-                c3,
-                None,            # true_author placeholder
-                model_radio,
-                custom_model_input
-            ),
-            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2,  mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]
-        )
+        # # Whenever the radio changes, refresh the task display to compute embeddings as well
+        # model_radio.change(
+        #     fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+        #     update_task_display(
+        #         mode,
+        #         dropdown,
+        #         instances,       # closed over
+        #         clustered_authors_df,
+        #         mystery,
+        #         c1,
+        #         c2,
+        #         c3,
+        #         None,            # true_author placeholder
+        #         model_radio,
+        #         custom_model_input
+        #     ),
+        #     inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+        #     outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
+        # )
+
+        # # And if the user types in a custom model ID, refresh the task display to compute embeddings as well
+        # custom_model.change(
+        #     fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+        #     update_task_display(
+        #         mode,
+        #         dropdown,
+        #         instances,       # closed over
+        #         clustered_authors_df,
+        #         mystery,
+        #         c1,
+        #         c2,
+        #         c3,
+        #         None,            # true_author placeholder
+        #         model_radio,
+        #         custom_model_input
+        #     ),
+        #     inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+        #     outputs=[header, mystery, c0, c1, c2,  mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]
+        # )
 
         # ── Visualization for clusters ─────────────────────────────
         gr.HTML(instruction_callout("Run visualization to see which author cluster contains the mystery document."))
