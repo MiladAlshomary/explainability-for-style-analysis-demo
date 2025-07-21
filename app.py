@@ -184,6 +184,7 @@ def app(share=False, use_cluster_feats=False):
         # ── State to hold embeddings DataFrame ─────────────────────
         task_authors_embeddings_df = gr.State()  # Store embeddings of task authors
         background_authors_embeddings_df = gr.State()  # Store background authors DataFrame
+        
         # ── Wire up callbacks ─────────────────────────────────────
         task_mode.change(
             fn=toggle_task,
@@ -284,10 +285,6 @@ def app(share=False, use_cluster_feats=False):
         bg_authors_df = gr.State()  # Holds the background authors DataFrame
         with gr.Row():
             with gr.Column(scale=3):
-                # plot_out   = gr.Plot(
-                #     label="Cluster Visualization",
-                #     elem_id="cluster-plot"
-                # )
                 axis_ranges = gr.Textbox(visible=False, elem_id="axis-ranges")
                 plot = gr.Plot(
                     label="Cluster Visualization",

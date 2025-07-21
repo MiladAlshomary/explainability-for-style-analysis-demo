@@ -87,6 +87,7 @@ def toggle_task(mode):
 
 # Update displayed texts based on mode
 def update_task_display(mode, iid, instances, background_df, mystery_file, cand1_file, cand2_file, cand3_file, true_author, model_radio, custom_model_input):
+    model_name = model_radio if model_radio != "Other" else custom_model_input
     if mode == "Predefined HRS Task":
         iid = int(iid.replace('Task ', ''))
         data = instances[iid]
@@ -107,8 +108,6 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
             {'authorID': 'a2_author', 'fullText': data['a2_fullText']}
         ])
     else:
-        print(f"model_radio: {model_radio}, custom_model_input: {custom_model_input}")
-        model_name = model_radio if model_radio != "Other" else custom_model_input
         header_html = "<h3>Custom Uploaded Task</h3>"
         mystery_txt = read_txt(mystery_file)
         c1_txt = read_txt(cand1_file)
@@ -125,10 +124,10 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         ])
     try:
         # Generate the embeddings for the custom task authors
-        task_authors_df = generate_style_embedding(task_authors_df, 'fullText', custom_model_input)
+        task_authors_df = generate_style_embedding(task_authors_df, 'fullText', model_name)
         # Generate the new embedding of all the background_df authors
-        background_df = generate_style_embedding(background_df, 'fullText', custom_model_input)
-        print(f"Generated embeddings for {len(background_df)} texts using model '{custom_model_input}'")
+        background_df = generate_style_embedding(background_df, 'fullText', model_name)
+        print(f"Generated embeddings for {len(background_df)} texts using model '{model_name}'")
     except Exception as e:
         print(f"Embedding generation failed: {e}")
     
