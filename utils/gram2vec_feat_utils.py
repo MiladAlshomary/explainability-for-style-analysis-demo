@@ -112,7 +112,7 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
         # texts
         texts = [
         ("Mystery Author", inst['Q_fullText']),
-        ("Predicted Candidate", inst[f'a{inst["latent_rank"][0]}_fullText']),
+        ("Candidate 1", inst[f'a{inst["latent_rank"][0]}_fullText']),
         ("Candidate 2",         inst[f'a{inst["latent_rank"][1]}_fullText']),
         ("Candidate 3",         inst[f'a{inst["latent_rank"][2]}_fullText']),
         ]
