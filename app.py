@@ -31,8 +31,7 @@ def app(share=False, use_cluster_feats=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
     interp      = load_interp_space(cfg)
-    clustered_authors_df = interp['clustered_authors_df']
-    task_authors_df = instance_to_df(instances[0]) #default task is task number 0
+    clustered_authors_df = interp['clustered_authors_df'].sample(200)
     
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
         # ── Big Centered Title ──────────────────────────────────────────
