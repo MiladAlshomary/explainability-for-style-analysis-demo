@@ -60,7 +60,7 @@ def generate_feature_spans_cached(client, instance_id: str, text: str, features:
     Returns the parsed JSON dict mapping feature->list[spans].
     """
     print(f"Generating spans for {instance_id} ({role})")
-    print(f"feature list {features}")
+    # print(f"feature list {features}")
     cache_path = os.path.join(CACHE_DIR, f"{instance_id}_{role}.json")
     if os.path.exists(cache_path):
         with open(cache_path) as f:
