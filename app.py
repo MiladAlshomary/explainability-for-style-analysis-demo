@@ -4,6 +4,7 @@ import json
 from utils.visualizations import *
 from utils.llm_feat_utils import *
 from utils.gram2vec_feat_utils import *
+from utils.interp_space_utils import *
 from utils.ui import *
 
 import yaml
@@ -29,6 +30,9 @@ GRAM2VEC_SHORTHAND = load_code_map()
 def app(share=False, use_cluster_feats=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
+    interp      = load_interp_space(cfg)
+    clustered_authors_df = interp['clustered_authors_df'].sample(200)
+    
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
         # ── Big Centered Title ──────────────────────────────────────────
         gr.HTML(styled_block("""
@@ -92,19 +96,52 @@ def app(share=False, use_cluster_feats=False):
         # ── Step-by-Step Guided Panel ──
         with gr.Accordion("📝 How to Use", open=True):
             gr.Markdown("""
-                    1. **Select** a pre-defined task from the dropdown
-                    2. Click **Run Visualization** to see where the authors are located in the AA model's space
-                    3. Pick an **LLM feature** to highlight in yellow  
-                    4. Pick a **Gram2Vec feature** to highlight in blue  
-                    5. Click **Show Combined Spans** to compare side-by-side
+                    1. **Select** a model and a task source (pre-defined or custom)
+                    2. Click **Load Task & Generate Embeddings** to load the task and generate embeddings
+                    3. **Run Visualization** to see the mystery author and candidates in the AA model's latent space
+                    4. **Zoom** into the visualization to select a cluster of background authors
+                    5. Pick an **LLM feature** to highlight in yellow  
+                    6. Pick a **Gram2Vec feature** to highlight in blue  
+                    7. Click **Show Combined Spans** to compare side-by-side
                     """
             )
 
+        # ── Model Selection ─────────────────────────────────
+        model_radio = gr.Radio(
+            choices=[
+                'gabrielloiseau/LUAR-MUD-sentence-transformers',
+                'gabrielloiseau/LUAR-CRUD-sentence-transformers',
+                'miladalsh/light-luar',
+                'AnnaWegmann/Style-Embedding',
+                'Other'
+            ],
+            value='gabrielloiseau/LUAR-MUD-sentence-transformers',
+            label='Choose a Model to inspect'
+        )
+        print(f"Model choices: {model_radio.choices}")
+        print(f"Model default: {model_radio.value}")
+        custom_model = gr.Textbox(
+            label='Custom Model ID',
+            placeholder='Enter your Hugging Face Model ID here',
+            visible=False,
+            interactive=True
+        )
+        # Show the textbox when 'Other' is selected
+        model_radio.change(
+            fn=toggle_custom_model,
+            inputs=[model_radio],
+            outputs=[custom_model]
+        )
 
-        # ── Dropdown and to select instance ─────────────────────────────
-        # Load default instance values for display
-        default_outputs = load_instance(0, instances)
-        gr.HTML("""
+        # ── Task Source Selection ─────────────────────────────────
+        task_mode = gr.Radio(
+            choices=["Predefined HRS Task", "Upload Your Own Task"],
+            value="Predefined HRS Task",
+            label="Select Task Source"
+        )
+        with gr.Column():
+            with gr.Column(visible=True) as predefined_container:
+                gr.HTML("""
                     <div style="
                         font-size: 1.3em;
                         font-weight: 600;
@@ -113,25 +150,70 @@ def app(share=False, use_cluster_feats=False):
                         Pick a pre-defined task to investigate (a mystery text and its three candidate authors)
                     </div>
                     """)
+                task_dropdown = gr.Dropdown(
+                    choices=[f"Task {i}" for i in instance_ids],
+                    value=f"Task {instance_ids[0]}",
+                    label="Choose which mystery document to explain",
+                )
+            with gr.Column(visible=False) as custom_container:
+                gr.HTML("""
+                    <div style="
+                        font-size: 1.3em;
+                        font-weight: 600;
+                        margin-bottom: 0.5em;
+                    ">
+                        Upload your own task
+                    </div>
+                    """)
+                mystery_input   = gr.File(label="Mystery (.txt)", file_types=['.txt'])
+                candidate1 = gr.File(label="Candidate1 (.txt)", file_types=['.txt'])
+                candidate2 = gr.File(label="Candidate2 (.txt)", file_types=['.txt'])
+                candidate3 = gr.File(label="Candidate3 (.txt)", file_types=['.txt'])
+        
+        # ── Load Task Button ─────────────────────────────────────
+        gr.HTML(instruction_callout("Click the button below to load the tasks and generate embeddings using selected model."))
+        load_button = gr.Button("Load Task & Generate Embeddings")
 
-        task_dropdown = gr.Dropdown(
-            choices=[f"Task {i}" for i in instance_ids],
-            value=f"Task {instance_ids[0]}",
-            label="Choose which mystery document to explain",
-        )
-
-
-        # ── HTML outputs for author texts… ─────────────────────────────
-        header  = gr.HTML(value=default_outputs[0])
-        mystery = gr.HTML(value=default_outputs[1])
+        # ── HTML outputs for author texts ───────────────────────────
+        default_outputs = load_instance(0, instances)
+        #dont need defaults since they are loaded only on click of the load button
+        header  = gr.HTML()
+        mystery = gr.HTML()
+        mystery_state = gr.State()  # Store unformatted mystery text for later use
         with gr.Row():
-            c0, c1, c2 = gr.HTML(value=default_outputs[2]), gr.HTML(value=default_outputs[3]), gr.HTML(value=default_outputs[4])
-
-        task_dropdown.change(
-            lambda iid: load_instance(int(iid.replace('Task ','')), instances),
-            inputs=task_dropdown,
-            outputs=[header, mystery, c0, c1, c2]
-        )    
+            c0 = gr.HTML()
+            c1 = gr.HTML()
+            c2 = gr.HTML()
+            c0_state = gr.State()  # Store unformatted candidate 1 text for later use
+            c1_state = gr.State()  # Store unformatted candidate 2 text for later use
+            c2_state = gr.State()  # Store unformatted candidate 3 text for later use
+        # ── State to hold embeddings DataFrame ─────────────────────
+        task_authors_embeddings_df = gr.State()  # Store embeddings of task authors
+        background_authors_embeddings_df = gr.State()  # Store background authors DataFrame
+        task_mode.change(
+            fn=toggle_task,
+            inputs=[task_mode],
+            outputs=[predefined_container, custom_container]
+        )
+        # ── Wire call to load task and generate embeddings once load button is clicked ───────────────────
+        load_button.click(
+            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+            update_task_display(
+                mode,
+                dropdown,
+                instances,       # closed over
+                clustered_authors_df,
+                mystery,
+                c1,
+                c2,
+                c3,
+                None,            # true_author placeholder
+                model_radio,
+                custom_model_input
+            ),
+            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
+        )
 
         # ── Visualization for clusters ─────────────────────────────
         gr.HTML(instruction_callout("Run visualization to see which author cluster contains the mystery document."))
@@ -141,10 +223,6 @@ def app(share=False, use_cluster_feats=False):
         bg_authors_df = gr.State()  # Holds the background authors DataFrame
         with gr.Row():
             with gr.Column(scale=3):
-                # plot_out   = gr.Plot(
-                #     label="Cluster Visualization",
-                #     elem_id="cluster-plot"
-                # )
                 axis_ranges = gr.Textbox(visible=False, elem_id="axis-ranges")
                 plot = gr.Plot(
                     label="Cluster Visualization",
@@ -270,11 +348,12 @@ def app(share=False, use_cluster_feats=False):
 
         # ── Visualization button click ───────────────────────────────
         run_btn.click(
-            fn=lambda iid: visualize_clusters_plotly(
-                int(iid.replace('Task ','')), cfg, instances
+            fn=lambda iid, model_radio, custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df: visualize_clusters_plotly(
+                int(iid.replace('Task ','')), cfg, instances, model_radio,
+                custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df
             ),
-            inputs=[task_dropdown],
-            outputs=[plot, cluster_dropdown, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
+            inputs=[task_dropdown, model_radio, custom_model, task_authors_embeddings_df, background_authors_embeddings_df],
+            outputs=[plot, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
         )
         
         # Populate feature list based on selection. 
@@ -343,18 +422,18 @@ def app(share=False, use_cluster_feats=False):
 
 
         # combined_btn.click(
-        #     fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v: show_combined_spans_all(
-        #         client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v
+        #     fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v, task_mode, mystery_state, c0_state, c1_state, c2_state: show_combined_spans_all(
+        #         client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v, task_mode, mystery_state, c0_state, c1_state, c2_state
         #     ),
-        #     inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb],
+        #     inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb, task_mode, mystery_state, c0_state, c1_state, c2_state],
         #     outputs=[combined_html]
         # )
+
         combined_btn.click(
             fn=lambda sel_feat_llm, all_feats, sel_feat_g2v, bg_authors_df, visible_backgournd_authors: show_combined_spans_for_bg_authors(
                 client, all_feats, bg_authors_df, visible_backgournd_authors, sel_feat_llm, sel_feat_g2v
             ),
             inputs=[features_rb, feature_list_state, gram2vec_rb, bg_authors_df, visible_backgournd_authors],
-            outputs=[combined_html]
         )
     
     

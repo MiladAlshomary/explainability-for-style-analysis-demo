@@ -6,6 +6,33 @@ import math
 from collections import Counter, defaultdict
 from typing import List, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
+import os
+import pickle
+import hashlib
+import json
+
+CACHE_DIR = "datasets/embeddings_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+# Bump this whenever there is a change etc...
+CACHE_VERSION = 1
+
+def get_task_authors_from_background_df(background_df):
+    task_authors_df = background_df[background_df.authorID.isin(["Q_author", "a0_author", "a1_author", "a2_author"])]
+    return task_authors_df
+
+def instance_to_df(instance):
+    #create a dataframe of the task authors
+    task_authos_df  = pd.DataFrame([
+        {'authorID': 'Q_author', 'fullText': instance['Q_fullText']},
+        {'authorID': 'a0_author', 'fullText': instance['a0_fullText']},
+        {'authorID': 'a1_author', 'fullText': instance['a1_fullText']},
+        {'authorID': 'a2_author', 'fullText': instance['a2_fullText']}
+                    
+    ])
+
+    #TODO add gram2vec feats
+
+    return task_authos_df
 
 
 def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, model_name: str) -> pd.DataFrame:
@@ -34,8 +61,7 @@ def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, 
     ]:
         print('Model is not supported')
         return background_corpus_df
-
-
+    
     print(f"Generating style embeddings using {model_name} on column '{text_clm}'...")
 
     model = SentenceTransformer(model_name)
@@ -92,6 +118,43 @@ def generate_style_embedding(background_corpus_df: pd.DataFrame, text_clm: str, 
     background_corpus_df[col_name] = final_embeddings
 
     return background_corpus_df
+
+# ── wrapper with caching ───────────────────────────────────────
+def cached_generate_style_embedding(background_corpus_df: pd.DataFrame,
+                                    text_clm: str,
+                                    model_name: str) -> pd.DataFrame:
+    """
+    Wraps `generate_style_embedding`, caching its output in pickle files
+    keyed by an MD5 of (model_name + text list). If the cache exists,
+    loads and returns it instead of recomputing.
+    """
+
+    # Gather the input texts (preserves list-of-strings if any)
+    texts = background_corpus_df[text_clm].fillna("").tolist()
+
+    # Create a reproducible JSON serialization of the texts
+    serialized = json.dumps({
+        "model": model_name,
+        "col": text_clm,
+        "texts": texts
+    }, sort_keys=True, ensure_ascii=False)
+
+    # Compute MD5 hash
+    digest = hashlib.md5(serialized.encode("utf-8")).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{digest}.pkl")
+
+    # If cache hit, load and return
+    if os.path.exists(cache_path):
+        print(f"Cache hit for {model_name} on column '{text_clm}'")
+        with open(cache_path, "rb") as f:
+            return pickle.load(f)
+
+    # Otherwise, compute, cache, and return
+    df_with_emb = generate_style_embedding(background_corpus_df, text_clm, model_name)
+    print(f"Computing embeddings for {model_name} on column '{text_clm}', saving to {cache_path}")
+    with open(cache_path, "wb") as f:
+        pickle.dump(df_with_emb, f)
+    return df_with_emb
 
 def get_style_feats_distribution(documentIDs, style_feats_dict):
     style_feats = []

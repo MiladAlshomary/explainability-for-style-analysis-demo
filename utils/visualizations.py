@@ -265,58 +265,75 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
-def visualize_clusters_plotly(iid, cfg, instances):
-    print("Generating cluster visualization")
+def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df):
+    model_name = model_radio if model_radio != "Other" else custom_model_input
+    embedding_col_name = f'{model_name.split("/")[-1]}_style_embedding'
 
+    print("Generating cluster visualization")
     iid = int(iid)
     interp      = load_interp_space(cfg)
-    dim2lat     = interp['dimension_to_latent']
+    # dim2lat     = interp['dimension_to_latent']
     style_names = interp['dimension_to_style']
-    bg_emb      = np.array(interp['author_embedding'])
+    # bg_emb      = np.array(interp['author_embedding'])
+    # print(f"bg_emb shape: {bg_emb.shape}")
+    #replace with cached embedddings
+    bg_emb      = np.array(background_authors_embeddings_df[embedding_col_name].tolist()) #placeholder for background embeddings
+    print(f"bg_emb shape: {bg_emb.shape}")
+    # print("interp.keys():", interp.keys())
     bg_lbls     = interp['author_labels']
     bg_ids      = interp['author_ids']
     clustered_authors_df = interp['clustered_authors_df']
 
-    inst         = instances[iid]
-    q_lat        = np.array(inst['author_latents'][:1])
-    c_lat        = np.array(inst['author_latents'][1:])
-    pred_idx     = inst['latent_rank'][0]
-    gt_idx       = inst['gt_idx']
+    # inst         = instances[iid]
+    # print("inst.keys():", inst.keys())
+    # q_lat        = np.array(inst['author_latents'][:1])
+    # print(f"q_lat shape: {q_lat.shape}")
+    # c_lat        = np.array(inst['author_latents'][1:])
+    # print(f"c_lat shape: {c_lat.shape}")
+    # pred_idx     = inst['latent_rank'][0]
+    # gt_idx       = inst['gt_idx']
+    q_lat = np.array(task_authors_df[embedding_col_name].iloc[0]).reshape(1, -1) # Mystery author latent
+    print(f"q_lat shape: {q_lat.shape}")
+    c_lat = np.array(task_authors_df[embedding_col_name].iloc[1:].tolist())  # Candidate authors latents
+    print(f"c_lat shape: {c_lat.shape}")
+    pred_idx     = None  # Index of the predicted author placeholder for now
+    gt_idx       = None  # Index of the ground truth author placeholder for now
 
-    cent_emb = np.array([v for _,v in dim2lat.items()])
-    cent_lbl = np.array([k for k,_ in dim2lat.items()])
+    # cent_emb = np.array([v for _,v in dim2lat.items()])
+    # cent_lbl = np.array([k for k,_ in dim2lat.items()])
 
-    all_emb = np.vstack([q_lat, c_lat, bg_emb, cent_emb])
+    # all_emb = np.vstack([q_lat, c_lat, bg_emb, cent_emb])
+    all_emb = np.vstack([q_lat, c_lat, bg_emb])
     proj    = compute_tsne_with_cache(all_emb)
 
     # split
     q_proj    = proj[0]
     c_proj    = proj[1:4]
     bg_proj   = proj[4:4+len(bg_lbls)]
-    cent_proj = proj[4+len(bg_lbls):]
+    # cent_proj = proj[4+len(bg_lbls):]
 
 
     # find nearest centroid
-    dists = np.linalg.norm(cent_proj - q_proj, axis=1)
-    idx   = int(np.argmin(dists))
-    cluster_label_query = cent_lbl[idx]
+    # dists = np.linalg.norm(cent_proj - q_proj, axis=1)
+    # idx   = int(np.argmin(dists))
+    # cluster_label_query = cent_lbl[idx]
     # features of the nearest centroid to display
-    feature_list = style_names[cluster_label_query]
+    # feature_list = style_names[cluster_label_query]
 
-    cluster_labels_per_candidate = [
-        cent_lbl[int(np.argmin(np.linalg.norm(cent_proj - c_proj[i], axis=1)))]
-        for i in range(c_proj.shape[0])
-    ]
+    # cluster_labels_per_candidate = [
+    #     cent_lbl[int(np.argmin(np.linalg.norm(cent_proj - c_proj[i], axis=1)))]
+    #     for i in range(c_proj.shape[0])
+    # ]
 
     # prepare colorscale
-    n_cent = len(cent_lbl)
-    cent_colors = sample_colorscale("algae", [i/(n_cent-1) for i in range(n_cent)])
+    # n_cent = len(cent_lbl)
+    # cent_colors = sample_colorscale("algae", [i/(n_cent-1) for i in range(n_cent)])
     # map each cluster label to its color
-    color_map = { label: cent_colors[i] for i, label in enumerate(cent_lbl) }
+    # color_map = { label: cent_colors[i] for i, label in enumerate(cent_lbl) }
 
     # uncomment the following line to show background authors
     ## background author colors pulled from their cluster label
-    bg_colors = [ color_map[label] for label in bg_lbls ]
+    # bg_colors = [ color_map[label] for label in bg_lbls ]
 
     # 2) build Plotly figure
     fig = go.Figure()
@@ -438,25 +455,25 @@ def visualize_clusters_plotly(iid, cfg, instances):
     # Prepare outputs for the new cluster‐dropdown UI
     # all_clusters = sorted(style_names.keys())
     # --- build display names for the dropdown ---
-    sorted_labels = sorted([int(lbl) for lbl in cent_lbl])
-    display_clusters = []
-    for lbl in sorted_labels:
-        name = f"Cluster {lbl}"
-        if lbl == cluster_label_query:
-            name += " (closest to mystery author)"
-        matching_indices = [i + 1 for i, val in enumerate(cluster_labels_per_candidate) if int(val) == lbl]
-        if matching_indices:
-            if len(matching_indices) == 1:
-                name += f" (closest to Candidate {matching_indices[0]} author)"
-            else:
-                candidate_str = ", ".join(f"Candidate {i}" for i in matching_indices)
-                name += f" (closest to {candidate_str} authors)"
-        display_clusters.append(name)
+    # sorted_labels = sorted([int(lbl) for lbl in cent_lbl])
+    # display_clusters = []
+    # for lbl in sorted_labels:
+    #     name = f"Cluster {lbl}"
+    #     if lbl == cluster_label_query:
+    #         name += " (closest to mystery author)"
+    #     matching_indices = [i + 1 for i, val in enumerate(cluster_labels_per_candidate) if int(val) == lbl]
+    #     if matching_indices:
+    #         if len(matching_indices) == 1:
+    #             name += f" (closest to Candidate {matching_indices[0]} author)"
+    #         else:
+    #             candidate_str = ", ".join(f"Candidate {i}" for i in matching_indices)
+    #             name += f" (closest to {candidate_str} authors)"
+    #     display_clusters.append(name)
     # print(f"All clusters: {all_clusters}")
     # return: figure, dropdown payload, full style_map
     return (
       fig,
-      update(choices=display_clusters, value=display_clusters[cluster_label_query]),
+    #   update(choices=display_clusters, value=display_clusters[cluster_label_query]),
       style_names, 
       bg_proj,  # Return background points
       bg_ids,    # Return background labels

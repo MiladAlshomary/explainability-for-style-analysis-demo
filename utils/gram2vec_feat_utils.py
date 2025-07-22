@@ -42,15 +42,15 @@ def get_shorthand(feature_str: str) -> str:
     """
     try:
         category, human = [p.strip() for p in feature_str.split(":", 1)]
-        print(f"Category: {category}, Human: {human}")
+        # print(f"Category: {category}, Human: {human}")
     except ValueError:
-        print("Invalid format for feature string:", feature_str)
+        # print("Invalid format for feature string:", feature_str)
         return None
     if category not in FEATURE_HANDLERS:
         return None
     code = load_code_map().get(human)
     if code is None:
-        print(f"Warning: No code found for human-readable feature '{human}'")
+        # print(f"Warning: No code found for human-readable feature '{human}'")
         return None  # fallback to the human-readable name
     return f"{FEATURE_HANDLERS[category]}:{code}"
 
@@ -200,23 +200,34 @@ def show_combined_spans_for_bg_authors(client, features_list, bg_authors_df, sel
 
     return "<div>" + "\n<hr>\n".join(html) + "</div>"
 
-def show_combined_spans_all(client, iid, selected_feature_llm, features_list, instances, selected_feature_g2v):
+def show_combined_spans_all(client, iid, selected_feature_llm, features_list, instances, selected_feature_g2v, task_mode,mystery_state, c0_state, c1_state, c2_state):
     """
     For mystery + 3 candidates:
      1. get llm spans via your existing cache+API
      2. get gram2vec spans via find_feature_spans
      3. merge and highlight both
     """
-    iid = int(iid)
-    inst = instances[iid]
+    if task_mode == "Predefined HRS Task":
+        iid = int(iid)
+        inst = instances[iid]
 
-    # texts
-    texts = [
-      ("Mystery Author", inst['Q_fullText']),
-      ("Predicted Candidate", inst[f'a{inst["latent_rank"][0]}_fullText']),
-      ("Candidate 2",         inst[f'a{inst["latent_rank"][1]}_fullText']),
-      ("Candidate 3",         inst[f'a{inst["latent_rank"][2]}_fullText']),
-    ]
+        # texts
+        texts = [
+        ("Mystery Author", inst['Q_fullText']),
+        ("Candidate 1", inst[f'a{inst["latent_rank"][0]}_fullText']),
+        ("Candidate 2",         inst[f'a{inst["latent_rank"][1]}_fullText']),
+        ("Candidate 3",         inst[f'a{inst["latent_rank"][2]}_fullText']),
+        ]
+    else:
+        # custom task
+        iid = "custom" # Add some type of hashing/unique identifier here as well
+        texts = [
+            ("Mystery Text", mystery_state),
+            ("Candidate 1", c0_state),
+            ("Candidate 2", c1_state),
+            ("Candidate 3", c2_state)
+        ]
+    
 
     # get llm spans map (list of spans objects) for each text
     if selected_feature_llm and selected_feature_llm != "None":
@@ -256,6 +267,7 @@ def show_combined_spans_all(client, iid, selected_feature_llm, features_list, in
                 spans = find_feature_spans(txt, short)
                 # spans = [Span(fs.start_char, fs.end_char) for fs in raw_spans]
             except:
+                print(f"Error finding spans for {short} {role}")
                 spans = []
             gram_spans_list.append(spans)
     else:
