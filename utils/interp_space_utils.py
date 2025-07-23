@@ -10,11 +10,44 @@ import os
 import pickle
 import hashlib
 import json
+from gram2vec import vectorizer
 
 CACHE_DIR = "datasets/embeddings_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 # Bump this whenever there is a change etc...
 CACHE_VERSION = 1
+
+def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd.DataFrame=None) -> pd.DataFrame:
+    """
+    Computes gram2vec feature vectors for each author and adds them to the DataFrame.
+    This effectively creates a mapping from each author to their vector.
+    """
+    if task_authors_df is not None:
+        clustered_authors_df = pd.concat([clustered_authors_df, task_authors_df])
+
+    # compute the gram2vec features
+    author_texts = ['\n\n'.join(x) for x in clustered_authors_df.fullText.tolist()]
+
+    g2v_feats_df = vectorizer.from_documents(author_texts, batch_size=64)
+    author_to_g2v_feats = {x[0]: x[1] for x in zip(clustered_authors_df.authorID.tolist(), g2v_feats_df.to_numpy().tolist())}
+
+    # apply normalization
+    vector_std  = np.std(list(author_to_g2v_feats.values()))
+    vector_mean = np.mean(list(author_to_g2v_feats.values()))
+    author_to_g2v_feats_z_normalized = {x[0]: (x[1] - vector_mean) / vector_std for x in author_to_g2v_feats.items()}
+    
+
+    # Add the vectors as a new column of the DataFrame.
+    clustered_authors_df['g2v_vector'] = [{x[1]: x[0] for x in zip(val, g2v_feats_df.columns.tolist())} 
+                                          for val in author_to_g2v_feats_z_normalized.values()]
+    
+    if task_authors_df is not None:
+        task_authors_df = clustered_authors_df[clustered_authors_df.authorID.isin(task_authors_df.authorID.tolist())]
+        clustered_authors_df = clustered_authors_df[~clustered_authors_df.authorID.isin(task_authors_df.authorID.tolist())]
+
+
+    return clustered_authors_df, task_authors_df
+
 
 def get_task_authors_from_background_df(background_df):
     task_authors_df = background_df[background_df.authorID.isin(["Q_author", "a0_author", "a1_author", "a2_author"])]
@@ -29,8 +62,6 @@ def instance_to_df(instance):
         {'authorID': 'a2_author', 'fullText': instance['a2_fullText']}
                     
     ])
-
-    #TODO add gram2vec feats
 
     return task_authos_df
 

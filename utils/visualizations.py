@@ -220,7 +220,7 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
 
     visible_authors = [lbl for lbl, keep in zip(bg_lbls, mask) if keep]
 
-    print(f"[INFO] Zoomed region includes {len(visible_authors)} authors.")
+    print(f"[INFO] Zoomed region includes {len(visible_authors)} authors:{visible_authors}")
 
     # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
     llm_feats = compute_clusters_style_representation(
