@@ -17,7 +17,8 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # Bump this whenever there is a change etc...
 CACHE_VERSION = 1
 
-def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd.DataFrame=None) -> pd.DataFrame:
+
+def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd.DataFrame=None, text_clm='fullText') -> pd.DataFrame:
     """
     Computes gram2vec feature vectors for each author and adds them to the DataFrame.
     This effectively creates a mapping from each author to their vector.
@@ -25,21 +26,42 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
     if task_authors_df is not None:
         clustered_authors_df = pd.concat([clustered_authors_df, task_authors_df])
 
-    # compute the gram2vec features
+    # Gather the input texts (preserves list-of-strings if any)
+    #texts = background_corpus_df[text_clm].fillna("").tolist()
     author_texts = ['\n\n'.join(x) for x in clustered_authors_df.fullText.tolist()]
 
-    g2v_feats_df = vectorizer.from_documents(author_texts, batch_size=64)
-    author_to_g2v_feats = {x[0]: x[1] for x in zip(clustered_authors_df.authorID.tolist(), g2v_feats_df.to_numpy().tolist())}
+    # Create a reproducible JSON serialization of the texts
+    serialized = json.dumps({
+        "col": text_clm,
+        "texts": author_texts
+    }, sort_keys=True, ensure_ascii=False)
 
-    # apply normalization
-    vector_std  = np.std(list(author_to_g2v_feats.values()))
-    vector_mean = np.mean(list(author_to_g2v_feats.values()))
-    author_to_g2v_feats_z_normalized = {x[0]: (x[1] - vector_mean) / vector_std for x in author_to_g2v_feats.items()}
+    # Compute MD5 hash
+    digest = hashlib.md5(serialized.encode("utf-8")).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{digest}.pkl")
+
+    # If cache hit, load and return
+    if os.path.exists(cache_path):
+        print(f"Cache hit...")
+        with open(cache_path, "rb") as f:
+            clustered_authors_df = pickle.load(f)
     
+    else: # Else compute and cache
+        g2v_feats_df = vectorizer.from_documents(author_texts, batch_size=16)
+        author_to_g2v_feats = {x[0]: x[1] for x in zip(clustered_authors_df.authorID.tolist(), g2v_feats_df.to_numpy().tolist())}
 
-    # Add the vectors as a new column of the DataFrame.
-    clustered_authors_df['g2v_vector'] = [{x[1]: x[0] for x in zip(val, g2v_feats_df.columns.tolist())} 
-                                          for val in author_to_g2v_feats_z_normalized.values()]
+        # apply normalization
+        vector_std  = np.std(list(author_to_g2v_feats.values()))
+        vector_mean = np.mean(list(author_to_g2v_feats.values()))
+        author_to_g2v_feats_z_normalized = {x[0]: (x[1] - vector_mean) / vector_std for x in author_to_g2v_feats.items()}
+        
+
+        # Add the vectors as a new column of the DataFrame.
+        clustered_authors_df['g2v_vector'] = [{x[1]: x[0] for x in zip(val, g2v_feats_df.columns.tolist())} 
+                                            for val in author_to_g2v_feats_z_normalized.values()]
+        
+        with open(cache_path, "wb") as f:
+            pickle.dump(clustered_authors_df, f)
     
     if task_authors_df is not None:
         task_authors_df = clustered_authors_df[clustered_authors_df.authorID.isin(task_authors_df.authorID.tolist())]
@@ -289,6 +311,58 @@ def compute_clusters_style_representation(
 
     return top_features
 
+
+def compute_clusters_g2v_representation(
+    background_corpus_df: pd.DataFrame,
+    author_ids: List[Any],
+    other_author_ids: List[Any],
+    features_clm_name: str,
+    top_n: int = 10
+) -> List[str]:
+
+
+    # Get boolean mask for documents in selected clusters
+    selected_mask = background_corpus_df['authorID'].isin(author_ids).to_numpy()
+
+    if not selected_mask.any():
+        return [] # No documents found for the given cluster_ids
+
+    # Subset the TF-IDF matrix using the boolean mask
+    selected_feats = background_corpus_df[selected_mask][features_clm_name].tolist()
+    all_g2v_feats  = list(selected_feats[0].keys())
+    all_g2v_values = np.array([list(x.values()) for x in selected_feats]).mean(axis=0)
+
+    top_g2v_feats = sorted(list(zip(all_g2v_feats, all_g2v_values)), key=lambda x: -x[1])
+    print(top_g2v_feats[:top_n])
+
+    return [x[0] for x in top_g2v_feats[:top_n]]
+
+    # # Sum TF-IDF scores across documents for each feature in the target clusters
+    # target_feature_scores_sum = selected_tfidf.sum(axis=0).A1  # Convert to 1D array
+
+    # # Initialize adjusted scores with target scores
+    # adjusted_feature_scores = target_feature_scores_sum.copy()
+
+    # # If other_cluster_ids are provided and not empty, subtract their TF-IDF sums
+    # if other_cluster_ids: # Checks if the list is not None and not empty
+    #     other_selected_mask = background_corpus_df[cluster_label_clm_name].isin(other_cluster_ids).to_numpy()
+
+    #     if other_selected_mask.any():
+    #         other_selected_tfidf = tfidf_matrix[other_selected_mask]
+    #         contrast_feature_scores_sum = other_selected_tfidf.sum(axis=0).A1
+            
+    #         # Element-wise subtraction; assumes feature_names aligns for both sums
+    #         adjusted_feature_scores -= contrast_feature_scores_sum
+
+    # # Map scores to feature names
+    # feature_score_dict = dict(zip(feature_names, adjusted_feature_scores))
+    # # Sort features by score
+    # sorted_features = sorted(feature_score_dict.items(), key=lambda item: item[1], reverse=True)
+
+    # # Return the names of the top_n features that have a score > 0
+    # top_features = [feature for feature, score in sorted_features if score > 0][:top_n]
+
+    # return top_features
 
 def generate_interpretable_space_representation(interp_space_path, styles_df_path, feat_clm, output_clm, num_feats=5):
     

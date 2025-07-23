@@ -367,7 +367,7 @@ def app(share=False, use_cluster_feats=False):
 
             axis_ranges.change(
                 fn=handle_zoom, 
-                inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df], 
+                inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df, task_authors_embeddings_df], 
                 outputs=[features_rb, gram2vec_rb , feature_list_state]
             )
 

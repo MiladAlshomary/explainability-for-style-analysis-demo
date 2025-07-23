@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
 import re
-from utils.interp_space_utils import compute_clusters_style_representation
+from utils.interp_space_utils import compute_clusters_style_representation, compute_clusters_g2v_representation
 from utils.llm_feat_utils import split_features
 from utils.gram2vec_feat_utils import get_shorthand
 
@@ -194,7 +194,7 @@ def load_interp_space(cfg):
     }
 
 #function to handle zoom events
-def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
+def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df):
     """
     event_json         – stringified JSON from JS listener
     bg_proj            – (N,2) numpy array with 2D coordinates
@@ -202,6 +202,7 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
     clustered_authors_df – pd.DataFrame containing authorID and final_attribute_name
     """
     print("[INFO] Handling zoom event")
+
     if not event_json:
         return gr.update(value="")
 
@@ -233,12 +234,13 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
 
     llm_feats = ['None'] + llm_feats
 
-    g2v_feats = compute_clusters_style_representation(
-        background_corpus_df=clustered_authors_df,
-        cluster_ids=visible_authors,
-        cluster_label_clm_name='authorID',
-        other_cluster_ids=[],
-        features_clm_name='gram2vec_feats'
+
+    merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
+    g2v_feats = compute_clusters_g2v_representation(
+        background_corpus_df=merged_authors_df,
+        author_ids=visible_authors,
+        other_author_ids=[],
+        features_clm_name='g2v_vector'
     )
     
     # Filter out any Gram2Vec feature without a shorthand
@@ -279,10 +281,9 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
     bg_emb      = np.array(background_authors_embeddings_df[embedding_col_name].tolist()) #placeholder for background embeddings
     print(f"bg_emb shape: {bg_emb.shape}")
     # print("interp.keys():", interp.keys())
-    bg_lbls     = interp['author_labels']
-    bg_ids      = interp['author_ids']
-    clustered_authors_df = interp['clustered_authors_df']
-
+    #bg_lbls     = interp['author_labels']
+    #bg_ids      = interp['author_ids']
+    bg_ids = task_authors_df['authorID'].tolist() + background_authors_embeddings_df['authorID'].tolist()
     # inst         = instances[iid]
     # print("inst.keys():", inst.keys())
     # q_lat        = np.array(inst['author_latents'][:1])
@@ -308,7 +309,9 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
     # split
     q_proj    = proj[0]
     c_proj    = proj[1:4]
-    bg_proj   = proj[4:4+len(bg_lbls)]
+    #bg_proj   = proj[4:4+len(bg_lbls)]
+    bg_proj   = proj
+
     # cent_proj = proj[4+len(bg_lbls):]
 
 
@@ -476,7 +479,7 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
       style_names, 
       bg_proj,  # Return background points
       bg_ids,    # Return background labels
-      clustered_authors_df,  # Return the DataFrame for zoom handling
+      background_authors_embeddings_df,  # Return the DataFrame for zoom handling
 
     )
     # return fig, update(choices=feature_list, value=feature_list[0]),feature_list
