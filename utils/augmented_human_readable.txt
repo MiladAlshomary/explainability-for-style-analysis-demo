@@ -352,3 +352,266 @@ Second person:Person=2
 Singular number:Number=Sing
 Superlative degree:Degree=Sup
 Third person:Person=3
+Number of Tokens:num_tokens
+
+Adjectival clause:acl
+Adjectival complement:acomp
+Adjectival modifier:amod
+Adverbial clause modifier:advcl
+Adverbial modifier:advmod
+Agent (in passive voice):agent
+Appositional modifier:appos
+Attribute:attr
+Case marking:case
+Clausal complement:ccomp
+Clausal subject:csubj
+Clausal subject (passive):csubjpass
+Complement of preposition:pcomp
+Compound word:compound
+Conjunct:conj
+Coordinating conjunction:cc
+Adposition (preposition or postposition):ADP
+Dative:dative
+Direct object:dobj
+Expletive:expl
+Marker (introducing adverbial clause):mark
+Meta modifier:meta
+Negation modifier:neg
+Nominal modifier:nmod
+Nominal subject (passive):nsubjpass
+Noun phrase as adverbial modifier:npadvmod
+Numeric modifier:nummod
+Object of preposition:pobj
+Object predicate:oprd
+Open clausal complement:xcomp
+Parataxis:parataxis
+Passive auxiliary:auxpass
+Possession modifier:poss
+Pre-correlative conjunction:preconj
+Predeterminer:predet
+Prepositional modifier:prep
+Quantifier modifier:quantmod
+Relative clause modifier:relcl
+Root of the sentence:ROOT
+Unspecified dependency:dep
+
+Article pronoun type:PronType=Art
+Bracket punctuation type:PunctType=Brck
+Cardinal number:NumType=Card
+Comma punctuation type:PunctType=Comm
+Comparative conjunction type:ConjType=Cmp
+Dash punctuation type:PunctType=Dash
+Demonstrative pronoun type:PronType=Dem
+Final punctuation:PunctSide=Fin
+Foreign word:Foreign=Yes
+Gerund verb form:VerbForm=Ger
+Hyphenated:Hyph=Yes
+Indefinite pronoun type:PronType=Ind
+Initial punctuation:PunctSide=Ini
+Modal verb type:VerbType=Mod
+Multiplicative number:NumType=Mult
+Negative polarity:Polarity=Neg
+Neuter gender:Gender=Neut
+Ordinal number:NumType=Ord
+Participle verb form:VerbForm=Part
+Period punctuation type:PunctType=Peri
+Possessive:Poss=Yes
+Quotation punctuation type:PunctType=Quot
+Reflexive:Reflex=Yes
+Relative pronoun type:PronType=Rel
+
+❤️:❤️
+👍:👍
+😂:😂
+😍:😍
+
+!:!
+":\\"
+%:%
+&:&
+':'
+(:(
+):\)
+*:*
+,:,
+-:-
+.:.
+;:;
+?:?
+_:_
+`:`
+–:–
+':'
+':'
+
+all-cleft:all-cleft
+coordinate-clause:coordinate-clause
+if-because-cleft:if-because-cleft
+it-cleft:it-cleft
+obj-relcl:obj-relcl
+passive:passive
+pseudo-cleft:pseudo-cleft
+subj-relcl:subj-relcl
+tag-question:tag-question
+there-cleft:there-cleft
+
+punctuation:punctuation
+
+Articles:DET
+Auxiliary Verbs:AUX
+Conjunctions:CCONJ
+Prepositions:ADP
+
+Personal Pronouns:category:Personal Pronouns
+Demonstrative Pronouns:category:Demonstrative Pronouns
+Interrogative Pronouns:category:Interrogative Pronouns
+Modal Verbs:category:Modal Verbs
+Contractions:category:Contractions
+Adverbs:category:Adverbs
+Other:category:Other
+
+i:i
+me:me
+my:my
+myself:myself
+we:we
+our:our
+ours:ours
+ourselves:ourselves
+you:you
+'re:'re
+'ve:'ve
+'ll:'ll
+'d:'d
+'s:'s
+'t:'t
+your:your
+yours:yours
+yourself:yourself
+yourselves:yourselves
+he:he
+him:him
+his:his
+himself:himself
+she:she
+her:her
+ers:ers
+herself:herself
+it:it
+its:its
+itself:itself
+they:they
+them:them
+their:their
+theirs:theirs
+themselves:themselves
+what:what
+which:which
+who:who
+this:this
+that:that
+these:these
+those:those
+am:am
+is:is
+are:are
+was:was
+were:were
+be:be
+been:been
+being:being
+have:have
+has:has
+had:had
+having:having
+do:do
+does:does
+did:did
+doing:doing
+a:a
+an:an
+the:the
+and:and
+but:but
+if:if
+or:or
+because:because
+as:as
+until:until
+while:while
+of:of
+at:at
+by:by
+for:for
+with:with
+about:about
+against:against
+between:between
+into:into
+through:through
+during:during
+before:before
+after:after
+above:above
+below:below
+to:to
+from:from
+up:up
+down:down
+in:in
+out:out
+on:on
+off:off
+over:over
+under:under
+again:again
+further:further
+then:then
+once:once
+here:here
+there:there
+when:when
+where:where
+why:why
+how:how
+all:all
+any:any
+both:both
+each:each
+few:few
+more:more
+most:most
+other:other
+some:some
+such:such
+no:no
+nor:nor
+not:not
+only:only
+own:own
+same:same
+so:so
+than:than
+too:too
+very:very
+can:can
+will:will
+just:just
+don:don
+should:should
+now:now
+ain:ain
+aren:aren
+couldn:couldn
+didn:didn
+doesn:doesn
+hadn:hadn
+hasn:hasn
+haven:haven
+isn:isn
+ma:ma
+shouldn:shouldn
+wasn:wasn
+weren:weren
+won:won
+wouldn:wouldn

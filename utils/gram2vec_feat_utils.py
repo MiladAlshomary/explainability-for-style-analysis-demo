@@ -19,9 +19,10 @@ FEATURE_HANDLERS = {
     "Punctuation":            "punctuation",
     "Letter":                 "letters",
     "Dependency Label":       "dep_labels",
-    "Morphology Tag":      "morph_tags",
+    "Morphology Tag":         "morph_tags",
     "Sentence Type":          "sentences",
-    "Emoji":                  "emojis"
+    "Emoji":                  "emojis",
+    "Number of Tokens":       "num_tokens"
 }
 
 @lru_cache(maxsize=1)
@@ -54,6 +55,30 @@ def get_shorthand(feature_str: str) -> str:
         return None  # fallback to the human-readable name
     return f"{FEATURE_HANDLERS[category]}:{code}"
 
+def get_fullform(shorthand: str) -> str:
+    """
+    Expects 'prefix:code' (e.g., 'pos_unigrams:ADJ'), returns 'Category:Human-Readable' 
+    (e.g., 'Part-of-Speech Unigram:Adjective'), or None if invalid.
+    """
+    try:
+        prefix, code = shorthand.split(":", 1)
+    except ValueError:
+        return None
+
+    # Reverse FEATURE_HANDLERS
+    reverse_handlers = {v: k for k, v in FEATURE_HANDLERS.items()}
+    category = reverse_handlers.get(prefix)
+    if category is None:
+        return None
+
+    # Reverse code map
+    code_map = load_code_map()
+    reverse_code_map = {v: k for k, v in code_map.items()}
+    human = reverse_code_map.get(code)
+    if human is None:
+        return None
+
+    return f"{category}:{human}"
 
 def highlight_both_spans(text, llm_spans, gram_spans):
     """
