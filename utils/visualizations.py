@@ -12,7 +12,7 @@ from gradio import update
 import re
 from utils.interp_space_utils import compute_clusters_style_representation, compute_clusters_g2v_representation
 from utils.llm_feat_utils import split_features
-from utils.gram2vec_feat_utils import get_shorthand
+from utils.gram2vec_feat_utils import get_shorthand, get_fullform
 
 import plotly.io as pio
 
@@ -242,26 +242,28 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
         other_author_ids=[],
         features_clm_name='g2v_vector'
     )
-    
-    # Filter out any Gram2Vec feature without a shorthand
-    filtered_g2v = []
+
+    # Gram2vec features are already in shorthand. convert to human readable for display
+    HR_g2v_list = []
     for feat in g2v_feats:
-        if get_shorthand(feat) is None:
-            print(f"Skipping Gram2Vec feature without shorthand: {feat}")
+        HR_g2v = get_fullform(feat)
+        print(f"\n\n feat: {feat} ---> Human Readable: {HR_g2v}")
+        if HR_g2v is None:
+            print(f"Skipping Gram2Vec feature without human readable form: {feat}")
         else:
-            filtered_g2v.append(feat)
-    
-    # Add "None" as a default selectable option
-    filtered_g2v = ["None"] + filtered_g2v
+            HR_g2v_list.append(HR_g2v)
+
+    HR_g2v_list = ["None"] + HR_g2v_list
 
     print(f"[INFO] Found {len(llm_feats)} LLM features and {len(g2v_feats)} Gram2Vec features in the zoomed region.")   
+    print(f"[INFO] unfiltered g2v features: {g2v_feats}")
 
     print(f"[INFO] LLM features: {llm_feats}")
-    print(f"[INFO] Gram2Vec features: {filtered_g2v}")
+    print(f"[INFO] Gram2Vec features: {HR_g2v_list}")
 
     return (
         gr.update(choices=llm_feats, value=llm_feats[0]),
-        gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
+        gr.update(choices=HR_g2v_list, value=HR_g2v_list[0]), 
         llm_feats
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats

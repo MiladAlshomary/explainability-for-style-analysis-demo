@@ -128,6 +128,7 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
     # computing g2v features
     print("Generating g2v features for on background corpus")
     background_df, task_authors_df = compute_g2v_features(background_df, task_authors_df)
+    print(f"Gram2Vec feature generation complete")
 
     # except Exception as e:
     #     print(f"Embedding generation failed: {e}")
