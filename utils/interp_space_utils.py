@@ -11,11 +11,18 @@ import pickle
 import hashlib
 import json
 from gram2vec import vectorizer
+from openai import OpenAI
+from openai.lib._pydantic import to_strict_json_schema
+from pydantic import BaseModel
 
 CACHE_DIR = "datasets/embeddings_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 # Bump this whenever there is a change etc...
 CACHE_VERSION = 1
+
+class style_analysis_schema(BaseModel):
+    features: list[str]
+    spans: dict[str, dict[str, list[str]]]
 
 
 def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd.DataFrame=None, text_clm='fullText') -> pd.DataFrame:
@@ -24,7 +31,7 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
     This effectively creates a mapping from each author to their vector.
     """
     if task_authors_df is not None:
-        clustered_authors_df = pd.concat([clustered_authors_df, task_authors_df])
+        clustered_authors_df = pd.concat([task_authors_df, clustered_authors_df])
 
     # Gather the input texts (preserves list-of-strings if any)
     #texts = background_corpus_df[text_clm].fillna("").tolist()
@@ -51,8 +58,9 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
         author_to_g2v_feats = {x[0]: x[1] for x in zip(clustered_authors_df.authorID.tolist(), g2v_feats_df.to_numpy().tolist())}
 
         # apply normalization
-        vector_std  = np.std(list(author_to_g2v_feats.values()))
-        vector_mean = np.mean(list(author_to_g2v_feats.values()))
+        vector_std  = np.std(list(author_to_g2v_feats.values()), axis=0)
+        vector_mean = np.mean(list(author_to_g2v_feats.values()), axis=0)
+        vector_std[vector_std == 0] = 1.0
         author_to_g2v_feats_z_normalized = {x[0]: (x[1] - vector_mean) / vector_std for x in author_to_g2v_feats.items()}
         
 
@@ -75,15 +83,18 @@ def get_task_authors_from_background_df(background_df):
     task_authors_df = background_df[background_df.authorID.isin(["Q_author", "a0_author", "a1_author", "a2_author"])]
     return task_authors_df
 
-def instance_to_df(instance):
+def instance_to_df(instance, predicted_author=None, ground_truth_author=None):
     #create a dataframe of the task authors
     task_authos_df  = pd.DataFrame([
-        {'authorID': 'Q_author', 'fullText': instance['Q_fullText']},
-        {'authorID': 'a0_author', 'fullText': instance['a0_fullText']},
-        {'authorID': 'a1_author', 'fullText': instance['a1_fullText']},
-        {'authorID': 'a2_author', 'fullText': instance['a2_fullText']}
+        {'authorID': 'Mystery author', 'fullText': instance['Q_fullText'], 'predicted': None, 'ground_truth': None},
+        {'authorID': 'Candidate Author 1', 'fullText': instance['a0_fullText'], 'predicted': predicted_author == 0, 'ground_truth': ground_truth_author == 0},
+        {'authorID': 'Candidate Author 2', 'fullText': instance['a1_fullText'], 'predicted': predicted_author == 1, 'ground_truth': ground_truth_author == 1},
+        {'authorID': 'Candidate Author 3', 'fullText': instance['a2_fullText'], 'predicted': predicted_author == 2, 'ground_truth': ground_truth_author == 2}
                     
     ])
+
+    if type(instance['Q_fullText']) == list:
+        task_authos_df = task_authos_df.groupby('authorID').agg({'fullText': lambda x: list(x)}).reset_index()
 
     return task_authos_df
 
@@ -311,6 +322,61 @@ def compute_clusters_style_representation(
 
     return top_features
 
+def compute_clusters_style_representation_2(
+        background_corpus_df: pd.DataFrame,
+        cluster_ids: List[Any],
+        cluster_label_clm_name: str = 'cluster_label',
+        max_num_feats: int = 5,
+        max_num_documents_per_author=3,
+        max_num_authors=5):
+    """
+    Call openAI to analyze the common writing style features of the given list of texts
+    """
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    assert background_corpus_df['fullText'].apply(
+        lambda x: isinstance(x, list) and all(isinstance(feat, str) for feat in x)
+    ).all(), f"Column fullText must contain lists of strings."
+
+    background_corpus_df = background_corpus_df[background_corpus_df[cluster_label_clm_name].isin(cluster_ids)]
+    
+    author_texts = ['\n\n'.join(author[:max_num_documents_per_author]) for author in background_corpus_df['fullText'].tolist()[:max_num_authors]]
+    author_texts = "\n\n".join(["""Author {}:\n""".format(i+1) + text for i, text in enumerate(author_texts)])
+    author_names = background_corpus_df[cluster_label_clm_name].tolist()[:max_num_authors]
+    print(author_names)
+    
+    prompt = f"""First identify a list of {max_num_feats} writing style features that are common between the given texts. Second for every text and style feature, extract all spans that represent the feature.
+    Author Texts:
+    \"\"\"{author_texts}\"\"\"
+    """
+
+    # Compute MD5 hash
+    digest = hashlib.md5(prompt.encode("utf-8")).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{digest}.pkl")
+
+    # If cache hit, load and return
+    if os.path.exists(cache_path):
+        print(f"Loading authors writing style from cache ...")
+        with open(cache_path, "rb") as f:
+            parsed_response = pickle.load(f)
+    
+    else: # Else compute and cache
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role":"assistant","content":"You are a forensic linguistic who knows how to analyze similarites in writing styles."},
+                {"role":"user","content":prompt}],
+            response_format={"type": "json_schema", "json_schema": {"name": "style_analysis_schema", "schema":  to_strict_json_schema(style_analysis_schema)}}
+        )
+
+        parsed_response = json.loads(response.choices[0].message.content)
+
+        with open(cache_path, "wb") as f:
+            pickle.dump(parsed_response, f)
+
+    return parsed_response 
+
 
 def compute_clusters_g2v_representation(
     background_corpus_df: pd.DataFrame,
@@ -327,42 +393,23 @@ def compute_clusters_g2v_representation(
     if not selected_mask.any():
         return [] # No documents found for the given cluster_ids
 
-    # Subset the TF-IDF matrix using the boolean mask
     selected_feats = background_corpus_df[selected_mask][features_clm_name].tolist()
     all_g2v_feats  = list(selected_feats[0].keys())
     all_g2v_values = np.array([list(x.values()) for x in selected_feats]).mean(axis=0)
 
-    top_g2v_feats = sorted(list(zip(all_g2v_feats, all_g2v_values)), key=lambda x: -x[1])
+
+    other_selected_feats = background_corpus_df[~selected_mask][features_clm_name].tolist()
+    all_g2v_other_feats  = list(other_selected_feats[0].keys())
+    all_g2v_other_values = np.array([list(x.values()) for x in other_selected_feats]).mean(axis=0)
+
+    final_g2v_feats_values = all_g2v_values - all_g2v_other_values
+
+
+    top_g2v_feats = sorted(list(zip(all_g2v_feats, final_g2v_feats_values)), key=lambda x: -x[1])
     print(top_g2v_feats[:top_n])
 
     return [x[0] for x in top_g2v_feats[:top_n]]
 
-    # # Sum TF-IDF scores across documents for each feature in the target clusters
-    # target_feature_scores_sum = selected_tfidf.sum(axis=0).A1  # Convert to 1D array
-
-    # # Initialize adjusted scores with target scores
-    # adjusted_feature_scores = target_feature_scores_sum.copy()
-
-    # # If other_cluster_ids are provided and not empty, subtract their TF-IDF sums
-    # if other_cluster_ids: # Checks if the list is not None and not empty
-    #     other_selected_mask = background_corpus_df[cluster_label_clm_name].isin(other_cluster_ids).to_numpy()
-
-    #     if other_selected_mask.any():
-    #         other_selected_tfidf = tfidf_matrix[other_selected_mask]
-    #         contrast_feature_scores_sum = other_selected_tfidf.sum(axis=0).A1
-            
-    #         # Element-wise subtraction; assumes feature_names aligns for both sums
-    #         adjusted_feature_scores -= contrast_feature_scores_sum
-
-    # # Map scores to feature names
-    # feature_score_dict = dict(zip(feature_names, adjusted_feature_scores))
-    # # Sort features by score
-    # sorted_features = sorted(feature_score_dict.items(), key=lambda item: item[1], reverse=True)
-
-    # # Return the names of the top_n features that have a score > 0
-    # top_features = [feature for feature, score in sorted_features if score > 0][:top_n]
-
-    # return top_features
 
 def generate_interpretable_space_representation(interp_space_path, styles_df_path, feat_clm, output_clm, num_feats=5):
     

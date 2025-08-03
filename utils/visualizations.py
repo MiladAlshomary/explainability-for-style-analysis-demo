@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
 import re
-from utils.interp_space_utils import compute_clusters_style_representation, compute_clusters_g2v_representation
+from utils.interp_space_utils import compute_clusters_style_representation_2, compute_clusters_g2v_representation
 from utils.llm_feat_utils import split_features
 from utils.gram2vec_feat_utils import get_shorthand, get_fullform
 
@@ -224,15 +224,21 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     print(f"[INFO] Zoomed region includes {len(visible_authors)} authors:{visible_authors}")
 
     # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
-    llm_feats = compute_clusters_style_representation(
-        background_corpus_df=clustered_authors_df,
+    # llm_feats = compute_clusters_style_representation(
+    #     background_corpus_df=clustered_authors_df,
+    #     cluster_ids=visible_authors,
+    #     cluster_label_clm_name='authorID',
+    #     other_cluster_ids=[],
+    #     features_clm_name='final_attribute_name_manually_processed'
+    # )
+    merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
+    style_analysis_response = compute_clusters_style_representation_2(
+        background_corpus_df=merged_authors_df,
         cluster_ids=visible_authors,
         cluster_label_clm_name='authorID',
-        other_cluster_ids=[],
-        features_clm_name='final_attribute_name_manually_processed'
     )
 
-    llm_feats = ['None'] + llm_feats
+    llm_feats = ['None'] + style_analysis_response['features']
 
 
     merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
@@ -263,8 +269,10 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
 
     return (
         gr.update(choices=llm_feats, value=llm_feats[0]),
-        gr.update(choices=HR_g2v_list, value=HR_g2v_list[0]), 
-        llm_feats
+        gr.update(choices=HR_g2v_list, value=HR_g2v_list[0]),
+        style_analysis_response,
+        llm_feats,
+        visible_authors
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
@@ -456,6 +464,7 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
             font=dict(color='darkblue', size=12)
         )
 
+    print('Done processing....')
     # Prepare outputs for the new cluster‐dropdown UI
     # all_clusters = sorted(style_names.keys())
     # --- build display names for the dropdown ---

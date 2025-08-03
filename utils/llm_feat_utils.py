@@ -110,4 +110,3 @@ def split_features(all_feats):
     g2v_feats = [feat for feat in all_feats if feat in GRAM2VEC_SET]
     llm_feats = [feat for feat in all_feats if feat not in GRAM2VEC_SET]
     return llm_feats, g2v_feats
-
