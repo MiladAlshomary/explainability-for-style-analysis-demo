@@ -279,7 +279,7 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
 def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df):
     model_name = model_radio if model_radio != "Other" else custom_model_input
     embedding_col_name = f'{model_name.split("/")[-1]}_style_embedding'
-
+    print(background_authors_embeddings_df.columns)
     print("Generating cluster visualization")
     iid = int(iid)
     interp      = load_interp_space(cfg)

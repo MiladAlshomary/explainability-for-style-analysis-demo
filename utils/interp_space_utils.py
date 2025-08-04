@@ -76,7 +76,7 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
         clustered_authors_df = clustered_authors_df[~clustered_authors_df.authorID.isin(task_authors_df.authorID.tolist())]
 
 
-    return clustered_authors_df, task_authors_df
+    return clustered_authors_df['g2v_vector'].tolist(), task_authors_df['g2v_vector'].tolist()
 
 
 def get_task_authors_from_background_df(background_df):
@@ -334,18 +334,14 @@ def compute_clusters_style_representation_2(
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    if background_corpus_df['fullText'].apply(
-        lambda x: isinstance(x, list) and all(isinstance(feat, str) for feat in x)
-    ).all():
-        background_corpus_df['fullText'] = background_corpus_df['fullText'].map(lambda x: '\n\n'.join(x))
-
-
+    background_corpus_df['fullText'] = background_corpus_df['fullText'].map(lambda x: '\n\n'.join(x[:max_num_documents_per_author]) if isinstance(x, list) else x)
     background_corpus_df = background_corpus_df[background_corpus_df[cluster_label_clm_name].isin(cluster_ids)]
     
-    author_texts = ['\n\n'.join(author[:max_num_documents_per_author]) for author in background_corpus_df['fullText'].tolist()[:max_num_authors]]
+    author_texts = background_corpus_df['fullText'].tolist()[:max_num_authors]
     author_texts = "\n\n".join(["""Author {}:\n""".format(i+1) + text for i, text in enumerate(author_texts)])
     author_names = background_corpus_df[cluster_label_clm_name].tolist()[:max_num_authors]
     print(author_names)
+    print(author_texts)
     
     prompt = f"""First identify a list of {max_num_feats} writing style features that are common between the given texts. Second for every author text and style feature, extract all spans that represent the feature. Output for every author all style features with their spans.
     Author Texts:
