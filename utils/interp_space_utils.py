@@ -334,9 +334,11 @@ def compute_clusters_style_representation_2(
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    assert background_corpus_df['fullText'].apply(
+    if background_corpus_df['fullText'].apply(
         lambda x: isinstance(x, list) and all(isinstance(feat, str) for feat in x)
-    ).all(), f"Column fullText must contain lists of strings."
+    ).all():
+        background_corpus_df['fullText'] = background_corpus_df['fullText'].map(lambda x: '\n\n'.join(x))
+
 
     background_corpus_df = background_corpus_df[background_corpus_df[cluster_label_clm_name].isin(cluster_ids)]
     
@@ -345,7 +347,7 @@ def compute_clusters_style_representation_2(
     author_names = background_corpus_df[cluster_label_clm_name].tolist()[:max_num_authors]
     print(author_names)
     
-    prompt = f"""First identify a list of {max_num_feats} writing style features that are common between the given texts. Second for every text and style feature, extract all spans that represent the feature.
+    prompt = f"""First identify a list of {max_num_feats} writing style features that are common between the given texts. Second for every author text and style feature, extract all spans that represent the feature. Output for every author all style features with their spans.
     Author Texts:
     \"\"\"{author_texts}\"\"\"
     """

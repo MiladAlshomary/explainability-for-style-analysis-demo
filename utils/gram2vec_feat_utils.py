@@ -146,7 +146,7 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
         print(f"in show spans: Selected LLM feature: {selected_feature_llm}")
         print(f"in show spans: features_list: {llm_style_feats_analysis['features']}")
 
-    
+        print(llm_style_feats_analysis)
         author_list = list(llm_style_feats_analysis['spans'].values())
         llm_spans_list = []
         for i, (_, txt) in enumerate(texts):
