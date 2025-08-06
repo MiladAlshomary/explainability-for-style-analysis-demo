@@ -197,7 +197,12 @@ def app(share=False, use_cluster_feats=False):
             outputs=[predefined_container, custom_container]
         )
         # ── Wire call to load task and generate embeddings once load button is clicked ───────────────────
+        loading_msg = gr.HTML()
         load_button.click(
+            fn=lambda: gr.update(value="⏳ Loading... Please wait", interactive=False),
+            inputs=[],
+            outputs=[load_button]
+        ).then(
             fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
             update_task_display(
                 mode,
@@ -214,6 +219,10 @@ def app(share=False, use_cluster_feats=False):
             ),
             inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
             outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
+        ).then(
+            fn=lambda: gr.update(value="Load Task & Generate Embeddings", interactive=True),
+            inputs=[],
+            outputs=[load_button]
         )
 
         # ── Visualization for clusters ─────────────────────────────
@@ -439,4 +448,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_cluster_feats", action="store_true", help="Use cluster-based selection for features")
     args = parser.parse_args()
-    app(share=False, use_cluster_feats=args.use_cluster_feats)
+    app(share=True, use_cluster_feats=args.use_cluster_feats)
