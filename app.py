@@ -31,8 +31,9 @@ def app(share=False, use_cluster_feats=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
     interp      = load_interp_space(cfg)
-    clustered_authors_df = interp['clustered_authors_df'].sample(200)
-    
+    clustered_authors_df = interp['clustered_authors_df'][:1000]
+    clustered_authors_df['fullText'] = clustered_authors_df['fullText'].map(lambda l: l[:3]) # Take at most 3 texts per author
+
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
         # ── Big Centered Title ──────────────────────────────────────────
         gr.HTML(styled_block("""
@@ -305,6 +306,8 @@ def app(share=False, use_cluster_feats=False):
         
         cluster_dropdown = gr.Dropdown(choices=[], label="Select Cluster to Inspect", visible=False)
         style_map_state = gr.State()
+        llm_style_feats_analysis = gr.State()
+        visible_zoomed_authors = gr.State()
 
         if use_cluster_feats:
             # ── Dynamic Cluster Choice dropdown ──────────────────────────────────
@@ -367,8 +370,8 @@ def app(share=False, use_cluster_feats=False):
 
             axis_ranges.change(
                 fn=handle_zoom, 
-                inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df], 
-                outputs=[features_rb, gram2vec_rb , feature_list_state]
+                inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df, task_authors_embeddings_df], 
+                outputs=[features_rb, gram2vec_rb , llm_style_feats_analysis, feature_list_state, visible_zoomed_authors]
             )
 
 
@@ -420,10 +423,8 @@ def app(share=False, use_cluster_feats=False):
 
 
         combined_btn.click(
-            fn=lambda iid, sel_feat_llm, all_feats, sel_feat_g2v, task_mode, mystery_state, c0_state, c1_state, c2_state: show_combined_spans_all(
-                client, iid.replace('Task ', ''), sel_feat_llm, all_feats, instances, sel_feat_g2v, task_mode, mystery_state, c0_state, c1_state, c2_state
-            ),
-            inputs=[task_dropdown, features_rb, feature_list_state, gram2vec_rb, task_mode, mystery_state, c0_state, c1_state, c2_state],
+            fn=show_combined_spans_all,
+            inputs=[features_rb, gram2vec_rb, llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_zoomed_authors],
             outputs=[combined_html]
         )
         # mapping -->
@@ -438,4 +439,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_cluster_feats", action="store_true", help="Use cluster-based selection for features")
     args = parser.parse_args()
-    app(share=True, use_cluster_feats=args.use_cluster_feats)
+    app(share=False, use_cluster_feats=args.use_cluster_feats)

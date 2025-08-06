@@ -9,4 +9,4 @@ python-dotenv
 gradio
 pyyaml
 plotly
-git+https://github.com/eric-sclafani/gram2vec
+git+https://github.com/MiladAlshomary/gram2vec

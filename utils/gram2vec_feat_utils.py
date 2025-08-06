@@ -6,7 +6,7 @@ from gram2vec.feature_locator import find_feature_spans
 from functools import lru_cache
 
 from utils.llm_feat_utils import generate_feature_spans_cached
-
+import pandas as pd
 Span = namedtuple('Span', ['start_char', 'end_char'])
 
 from gram2vec import vectorizer
@@ -19,9 +19,10 @@ FEATURE_HANDLERS = {
     "Punctuation":            "punctuation",
     "Letter":                 "letters",
     "Dependency Label":       "dep_labels",
-    "Morphology Tag":      "morph_tags",
+    "Morphology Tag":         "morph_tags",
     "Sentence Type":          "sentences",
-    "Emoji":                  "emojis"
+    "Emoji":                  "emojis",
+    "Number of Tokens":       "num_tokens"
 }
 
 @lru_cache(maxsize=1)
@@ -54,6 +55,30 @@ def get_shorthand(feature_str: str) -> str:
         return None  # fallback to the human-readable name
     return f"{FEATURE_HANDLERS[category]}:{code}"
 
+def get_fullform(shorthand: str) -> str:
+    """
+    Expects 'prefix:code' (e.g., 'pos_unigrams:ADJ'), returns 'Category:Human-Readable' 
+    (e.g., 'Part-of-Speech Unigram:Adjective'), or None if invalid.
+    """
+    try:
+        prefix, code = shorthand.split(":", 1)
+    except ValueError:
+        return None
+
+    # Reverse FEATURE_HANDLERS
+    reverse_handlers = {v: k for k, v in FEATURE_HANDLERS.items()}
+    category = reverse_handlers.get(prefix)
+    if category is None:
+        return None
+
+    # Reverse code map
+    code_map = load_code_map()
+    reverse_code_map = {v: k for k, v in code_map.items()}
+    human = reverse_code_map.get(code)
+    if human is None:
+        return None
+
+    return f"{category}:{human}"
 
 def highlight_both_spans(text, llm_spans, gram_spans):
     """
@@ -98,55 +123,55 @@ def highlight_both_spans(text, llm_spans, gram_spans):
     return style + highlighted
 
 
-def show_combined_spans_all(client, iid, selected_feature_llm, features_list, instances, selected_feature_g2v, task_mode,mystery_state, c0_state, c1_state, c2_state):
+def show_combined_spans_all(selected_feature_llm, selected_feature_g2v, 
+                            llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_authors, max_num_authors=3):
     """
     For mystery + 3 candidates:
      1. get llm spans via your existing cache+API
      2. get gram2vec spans via find_feature_spans
      3. merge and highlight both
     """
-    if task_mode == "Predefined HRS Task":
-        iid = int(iid)
-        inst = instances[iid]
-
-        # texts
-        texts = [
-        ("Mystery Author", inst['Q_fullText']),
-        ("Candidate 1", inst[f'a{inst["latent_rank"][0]}_fullText']),
-        ("Candidate 2",         inst[f'a{inst["latent_rank"][1]}_fullText']),
-        ("Candidate 3",         inst[f'a{inst["latent_rank"][2]}_fullText']),
-        ]
-    else:
-        # custom task
-        iid = "custom" # Add some type of hashing/unique identifier here as well
-        texts = [
-            ("Mystery Text", mystery_state),
-            ("Candidate 1", c0_state),
-            ("Candidate 2", c1_state),
-            ("Candidate 3", c2_state)
-        ]
     
+    background_and_task_authors = pd.concat([task_authors_embeddings_df, background_authors_embeddings_df])
+    background_and_task_authors = background_and_task_authors[background_and_task_authors.authorID.isin(visible_authors)]
 
+    authors_texts = ['\n\n =========== \n\n'.join(x) if type(x) == list else x for x in background_and_task_authors[:max_num_authors]['fullText'].tolist()]
+    authors_names = background_and_task_authors[:max_num_authors]['authorID'].tolist()
+    texts = list(zip(authors_names, authors_texts))
+
+    print(texts)
+    print(llm_style_feats_analysis)
     # get llm spans map (list of spans objects) for each text
     if selected_feature_llm and selected_feature_llm != "None":
         print(f"in show spans: Selected LLM feature: {selected_feature_llm}")
-        print(f"in show spans: features_list: {features_list}")
-        llm_maps = [
-        generate_feature_spans_cached(client, f"{iid}", texts[0][1], features_list, role="mystery"),
-        generate_feature_spans_cached(client, f"{iid}_cand0",   texts[1][1], features_list, role="candidate"),
-        generate_feature_spans_cached(client, f"{iid}_cand1",   texts[2][1], features_list, role="candidate"),
-        generate_feature_spans_cached(client, f"{iid}_cand2",   texts[3][1], features_list, role="candidate"),
-        ]
-        # get span indexes for each text
-        llm_spans_list = [
-            [
-                # positional: first arg → start_char, second → end_char
-                Span(txt.find(s), txt.find(s) + len(s))
-                for s in llm_maps[i].get(selected_feature_llm) 
-                if s in txt
-            ]
-            for i, (_, txt) in enumerate(texts)
-        ]
+        print(f"in show spans: features_list: {llm_style_feats_analysis['features']}")
+
+        print(llm_style_feats_analysis)
+        author_list = list(llm_style_feats_analysis['spans'].values())
+        llm_spans_list = []
+        for i, (_, txt) in enumerate(texts):
+            author_spans_list = []
+            for txt_span in author_list[i][selected_feature_llm]:
+                    author_spans_list.append(Span(txt.find(txt_span), txt.find(txt_span) + len(txt_span)))
+            llm_spans_list.append(author_spans_list)
+
+        print(llm_spans_list)
+        # llm_maps = [
+        # generate_feature_spans_cached(client, f"{iid}", texts[0][1], features_list, role="mystery"),
+        # generate_feature_spans_cached(client, f"{iid}_cand0",   texts[1][1], features_list, role="candidate"),
+        # generate_feature_spans_cached(client, f"{iid}_cand1",   texts[2][1], features_list, role="candidate"),
+        # generate_feature_spans_cached(client, f"{iid}_cand2",   texts[3][1], features_list, role="candidate"),
+        # ]
+        # # get span indexes for each text
+        # llm_spans_list = [
+        #     [
+        #         # positional: first arg → start_char, second → end_char
+        #         Span(txt.find(s), txt.find(s) + len(s))
+        #         for s in llm_maps[i].get(selected_feature_llm) 
+        #         if s in txt
+        #     ]
+        #     for i, (_, txt) in enumerate(texts)
+        # ]
     else:
         print("Skipping LLM span extraction: feature is None")
         llm_spans_list = [[] for _ in texts]

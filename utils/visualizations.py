@@ -10,9 +10,9 @@ import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
 import re
-from utils.interp_space_utils import compute_clusters_style_representation
+from utils.interp_space_utils import compute_clusters_style_representation_2, compute_clusters_g2v_representation
 from utils.llm_feat_utils import split_features
-from utils.gram2vec_feat_utils import get_shorthand
+from utils.gram2vec_feat_utils import get_shorthand, get_fullform
 
 import plotly.io as pio
 
@@ -194,7 +194,7 @@ def load_interp_space(cfg):
     }
 
 #function to handle zoom events
-def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
+def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df):
     """
     event_json         – stringified JSON from JS listener
     bg_proj            – (N,2) numpy array with 2D coordinates
@@ -202,6 +202,7 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
     clustered_authors_df – pd.DataFrame containing authorID and final_attribute_name
     """
     print("[INFO] Handling zoom event")
+
     if not event_json:
         return gr.update(value="")
 
@@ -220,54 +221,65 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df):
 
     visible_authors = [lbl for lbl, keep in zip(bg_lbls, mask) if keep]
 
-    print(f"[INFO] Zoomed region includes {len(visible_authors)} authors.")
+    print(f"[INFO] Zoomed region includes {len(visible_authors)} authors:{visible_authors}")
 
     # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
-    llm_feats = compute_clusters_style_representation(
-        background_corpus_df=clustered_authors_df,
+    # llm_feats = compute_clusters_style_representation(
+    #     background_corpus_df=clustered_authors_df,
+    #     cluster_ids=visible_authors,
+    #     cluster_label_clm_name='authorID',
+    #     other_cluster_ids=[],
+    #     features_clm_name='final_attribute_name_manually_processed'
+    # )
+    merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
+    style_analysis_response = compute_clusters_style_representation_2(
+        background_corpus_df=merged_authors_df,
         cluster_ids=visible_authors,
         cluster_label_clm_name='authorID',
-        other_cluster_ids=[],
-        features_clm_name='final_attribute_name_manually_processed'
     )
 
-    llm_feats = ['None'] + llm_feats
+    llm_feats = ['None'] + style_analysis_response['features']
 
-    g2v_feats = compute_clusters_style_representation(
-        background_corpus_df=clustered_authors_df,
-        cluster_ids=visible_authors,
-        cluster_label_clm_name='authorID',
-        other_cluster_ids=[],
-        features_clm_name='gram2vec_feats'
+
+    merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
+    g2v_feats = compute_clusters_g2v_representation(
+        background_corpus_df=merged_authors_df,
+        author_ids=visible_authors,
+        other_author_ids=[],
+        features_clm_name='g2v_vector'
     )
-    
-    # Filter out any Gram2Vec feature without a shorthand
-    filtered_g2v = []
+
+    # Gram2vec features are already in shorthand. convert to human readable for display
+    HR_g2v_list = []
     for feat in g2v_feats:
-        if get_shorthand(feat) is None:
-            print(f"Skipping Gram2Vec feature without shorthand: {feat}")
+        HR_g2v = get_fullform(feat)
+        print(f"\n\n feat: {feat} ---> Human Readable: {HR_g2v}")
+        if HR_g2v is None:
+            print(f"Skipping Gram2Vec feature without human readable form: {feat}")
         else:
-            filtered_g2v.append(feat)
-    
-    # Add "None" as a default selectable option
-    filtered_g2v = ["None"] + filtered_g2v
+            HR_g2v_list.append(HR_g2v)
+
+    HR_g2v_list = ["None"] + HR_g2v_list
 
     print(f"[INFO] Found {len(llm_feats)} LLM features and {len(g2v_feats)} Gram2Vec features in the zoomed region.")   
+    print(f"[INFO] unfiltered g2v features: {g2v_feats}")
 
     print(f"[INFO] LLM features: {llm_feats}")
-    print(f"[INFO] Gram2Vec features: {filtered_g2v}")
+    print(f"[INFO] Gram2Vec features: {HR_g2v_list}")
 
     return (
         gr.update(choices=llm_feats, value=llm_feats[0]),
-        gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
-        llm_feats
+        gr.update(choices=HR_g2v_list, value=HR_g2v_list[0]),
+        style_analysis_response,
+        llm_feats,
+        visible_authors
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
 def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df):
     model_name = model_radio if model_radio != "Other" else custom_model_input
     embedding_col_name = f'{model_name.split("/")[-1]}_style_embedding'
-
+    print(background_authors_embeddings_df.columns)
     print("Generating cluster visualization")
     iid = int(iid)
     interp      = load_interp_space(cfg)
@@ -279,10 +291,9 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
     bg_emb      = np.array(background_authors_embeddings_df[embedding_col_name].tolist()) #placeholder for background embeddings
     print(f"bg_emb shape: {bg_emb.shape}")
     # print("interp.keys():", interp.keys())
-    bg_lbls     = interp['author_labels']
-    bg_ids      = interp['author_ids']
-    clustered_authors_df = interp['clustered_authors_df']
-
+    #bg_lbls     = interp['author_labels']
+    #bg_ids      = interp['author_ids']
+    bg_ids = task_authors_df['authorID'].tolist() + background_authors_embeddings_df['authorID'].tolist()
     # inst         = instances[iid]
     # print("inst.keys():", inst.keys())
     # q_lat        = np.array(inst['author_latents'][:1])
@@ -308,7 +319,9 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
     # split
     q_proj    = proj[0]
     c_proj    = proj[1:4]
-    bg_proj   = proj[4:4+len(bg_lbls)]
+    #bg_proj   = proj[4:4+len(bg_lbls)]
+    bg_proj   = proj
+
     # cent_proj = proj[4+len(bg_lbls):]
 
 
@@ -451,6 +464,7 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
             font=dict(color='darkblue', size=12)
         )
 
+    print('Done processing....')
     # Prepare outputs for the new cluster‐dropdown UI
     # all_clusters = sorted(style_names.keys())
     # --- build display names for the dropdown ---
@@ -476,7 +490,7 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
       style_names, 
       bg_proj,  # Return background points
       bg_ids,    # Return background labels
-      clustered_authors_df,  # Return the DataFrame for zoom handling
+      background_authors_embeddings_df,  # Return the DataFrame for zoom handling
 
     )
     # return fig, update(choices=feature_list, value=feature_list[0]),feature_list
