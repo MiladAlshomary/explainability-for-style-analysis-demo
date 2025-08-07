@@ -414,39 +414,6 @@ def identify_style_features(author_texts: list[str], max_num_feats: int = 5) -> 
 
     return retry_call(_make_call, FeatureIdentificationSchema).features
 
-def extract_feature_spans(author_text_map: dict[str, str], features: list[str]) -> dict:
-    author_block = "\n\n".join([f"Author {name}:\n{text}" for name, text in author_text_map.items()])
-    features_str = "\n".join([f"- {f}" for f in features])
-
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-    prompt = f"""Given the following texts and style features, extract all spans that represent each feature in each author's text.
-    Style Features:
-    {features_str}
-
-    Author Texts:
-    \"\"\"{author_block}\"\"\"
-    """
-
-    def _make_call():
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "assistant", "content": "You are a forensic linguist specializing in writing styles."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "SpanExtractionSchema",
-                    "schema": to_strict_json_schema(SpanExtractionSchema)
-                }
-            }
-        )
-        return json.loads(response.choices[0].message.content)
-
-    return retry_call(_make_call, SpanExtractionSchema).spans
-
 def retry_call(call_fn, schema_class, max_attempts=3, wait_sec=2):
     for attempt in range(max_attempts):
         try:
