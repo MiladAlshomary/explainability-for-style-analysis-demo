@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from pydantic import ValidationError
 import time
 from utils.llm_feat_utils import generate_feature_spans_cached
+from collections import Counter
 
 CACHE_DIR = "datasets/embeddings_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -41,11 +42,20 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
     This effectively creates a mapping from each author to their vector.
     """
     if task_authors_df is not None:
+        print (f"concatenating task authors and background corpus authors")
+        print(f"Number of task authors: {len(task_authors_df)}")
+        print(f"task authors author_ids: {task_authors_df.authorID.tolist()}")
+        print(f"task authors -->")
+        print(task_authors_df)
+        print(f"Number of background corpus authors: {len(clustered_authors_df)}")
         clustered_authors_df = pd.concat([task_authors_df, clustered_authors_df])
+        print(f"Number of authors after concatenation: {len(clustered_authors_df)}")
 
     # Gather the input texts (preserves list-of-strings if any)
     #texts = background_corpus_df[text_clm].fillna("").tolist()
     author_texts = ['\n\n'.join(x) for x in clustered_authors_df.fullText.tolist()]
+
+    print(f"Number of author_texts: {len(author_texts)}")
 
     # Create a reproducible JSON serialization of the texts
     serialized = json.dumps({
@@ -65,13 +75,30 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
     
     else: # Else compute and cache
         g2v_feats_df = vectorizer.from_documents(author_texts, batch_size=16)
+
+        print(f"Number of g2v features: {len(g2v_feats_df)}")
+        print(f"Number of clustered_authors_df.authorID.tolist(): {len(clustered_authors_df.authorID.tolist())}")
+        print(f"Number of g2v_feats_df.to_numpy().tolist(): {len(g2v_feats_df.to_numpy().tolist())}")
+
+        ids = clustered_authors_df.authorID.tolist()
+        counter = Counter(ids)
+        duplicates = [k for k, v in counter.items() if v > 1]
+
+        print(f"Duplicate authorIDs: {duplicates}")
+        print(f"Number of duplicates: {len(ids) - len(set(ids))}")
+
         author_to_g2v_feats = {x[0]: x[1] for x in zip(clustered_authors_df.authorID.tolist(), g2v_feats_df.to_numpy().tolist())}
+
+        print(f"Number of authors with g2v features: {len(author_to_g2v_feats)}")
 
         # apply normalization
         vector_std  = np.std(list(author_to_g2v_feats.values()), axis=0)
         vector_mean = np.mean(list(author_to_g2v_feats.values()), axis=0)
         vector_std[vector_std == 0] = 1.0
         author_to_g2v_feats_z_normalized = {x[0]: (x[1] - vector_mean) / vector_std for x in author_to_g2v_feats.items()}
+
+        print(f"Number of authors with g2v features normalized: {len(author_to_g2v_feats_z_normalized)}")
+        print(f" len of clustered authors df: {len(clustered_authors_df)}")
         
 
         # Add the vectors as a new column of the DataFrame.
@@ -220,6 +247,7 @@ def cached_generate_style_embedding(background_corpus_df: pd.DataFrame,
     # If cache hit, load and return
     if os.path.exists(cache_path):
         print(f"Cache hit for {model_name} on column '{text_clm}'")
+        print(cache_path)
         with open(cache_path, "rb") as f:
             return pickle.load(f)
 

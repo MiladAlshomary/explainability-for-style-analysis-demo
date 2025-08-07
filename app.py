@@ -7,6 +7,10 @@ from utils.gram2vec_feat_utils import *
 from utils.interp_space_utils import *
 from utils.ui import *
 
+import os
+os.environ["GRADIO_TEMP_DIR"] = "./datasets/temp"  # Set a custom temp directory for Gradio
+os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
+
 import yaml
 import argparse
 

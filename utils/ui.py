@@ -102,6 +102,8 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, ground_truth_author)
         #create a dataframe of the task authors
         task_authors_df  = instance_to_df(instances[iid])
+        print(f"\n\n\n ----> Loaded task {iid} with {len(task_authors_df)} authors\n\n\n")
+        print(task_authors_df)
     else:
         header_html = "<h3>Custom Uploaded Task</h3>"
         mystery_txt = read_txt(mystery_file)
@@ -111,7 +113,19 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         candidate_texts = [c1_txt, c2_txt, c3_txt]
         predicted_author = None  # Placeholder for predicted author
         header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, true_author)
-        task_authors_df  = instance_to_df(instances[iid])
+        # task_authors_df = pd.DataFrame({
+        #         'role': ['mystery', 'candidate1', 'candidate2', 'candidate3'],
+        #         'fullText': [mystery_txt, c1_txt, c2_txt, c3_txt],
+
+        #     })
+        custom_task_instance = {
+            'Q_fullText': mystery_txt,
+            'a0_fullText': c1_txt,
+            'a1_fullText': c2_txt,
+            'a2_fullText': c3_txt
+        }
+        task_authors_df  = instance_to_df(custom_task_instance)
+        print(task_authors_df)
     #try:
     # Generate the embeddings for the custom task authors
     # task_authors_df = generate_style_embedding(task_authors_df, 'fullText', model_name)
@@ -120,6 +134,8 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
     # print(f"Generated embeddings for {len(background_df)} texts using model '{model_name}'")
     print(f"Generating embeddings for {model_name} on task authors")
     task_authors_df = cached_generate_style_embedding(task_authors_df, 'fullText', model_name)
+    print("Task authors after embedding generation:")
+    print(task_authors_df)
     # Generate the new embedding of all the background_df authors
     print(f"Generating embeddings for {model_name} on background corpus")
     background_df = cached_generate_style_embedding(background_df, 'fullText', model_name)
