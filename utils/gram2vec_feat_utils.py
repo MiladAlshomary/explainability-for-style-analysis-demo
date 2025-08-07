@@ -124,29 +124,35 @@ def highlight_both_spans(text, llm_spans, gram_spans):
 
 
 def show_combined_spans_all(selected_feature_llm, selected_feature_g2v, 
-                            llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_authors, max_num_authors=3):
+                            llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_authors, max_num_authors=7):
     """
     For mystery + 3 candidates:
      1. get llm spans via your existing cache+API
      2. get gram2vec spans via find_feature_spans
      3. merge and highlight both
     """
+    print(f"\n\n\n\n\nShowing combined spans for LLM feature '{selected_feature_llm}' and Gram2Vec feature '{selected_feature_g2v}'")
+    print(f" keys = {background_authors_embeddings_df.keys()}")
     
+    # background_and_task_authors = pd.concat([task_authors_embeddings_df, background_authors_embeddings_df])
+    # background_and_task_authors = background_and_task_authors[background_and_task_authors.authorID.isin(visible_authors)]
+
+    #get the visible background authors
+    background_authors_embeddings_df = background_authors_embeddings_df[background_authors_embeddings_df.authorID.isin(visible_authors)]
     background_and_task_authors = pd.concat([task_authors_embeddings_df, background_authors_embeddings_df])
-    background_and_task_authors = background_and_task_authors[background_and_task_authors.authorID.isin(visible_authors)]
 
     authors_texts = ['\n\n =========== \n\n'.join(x) if type(x) == list else x for x in background_and_task_authors[:max_num_authors]['fullText'].tolist()]
     authors_names = background_and_task_authors[:max_num_authors]['authorID'].tolist()
     texts = list(zip(authors_names, authors_texts))
 
-    print(texts)
-    print(llm_style_feats_analysis)
+    # print(texts)
+    # print(llm_style_feats_analysis)
     # get llm spans map (list of spans objects) for each text
     if selected_feature_llm and selected_feature_llm != "None":
-        print(f"in show spans: Selected LLM feature: {selected_feature_llm}")
-        print(f"in show spans: features_list: {llm_style_feats_analysis['features']}")
+        # print(f"in show spans: Selected LLM feature: {selected_feature_llm}")
+        # print(f"in show spans: features_list: {llm_style_feats_analysis['features']}")
 
-        print(llm_style_feats_analysis)
+        # print(llm_style_feats_analysis)
         author_list = list(llm_style_feats_analysis['spans'].values())
         llm_spans_list = []
         for i, (_, txt) in enumerate(texts):
@@ -155,7 +161,7 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
                     author_spans_list.append(Span(txt.find(txt_span), txt.find(txt_span) + len(txt_span)))
             llm_spans_list.append(author_spans_list)
 
-        print(llm_spans_list)
+        # print(llm_spans_list)
         # llm_maps = [
         # generate_feature_spans_cached(client, f"{iid}", texts[0][1], features_list, role="mystery"),
         # generate_feature_spans_cached(client, f"{iid}_cand0",   texts[1][1], features_list, role="candidate"),
@@ -198,8 +204,51 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
         gram_spans_list = [[] for _ in texts]
 
     # build HTML blocks
+    print(f" ----> Number of authors: {len(texts)}")
+
+    html_task_authors = create_html(
+        texts[:4], #first 4 are task
+        llm_spans_list,
+        gram_spans_list,
+        selected_feature_llm,
+        selected_feature_g2v,
+        short,
+        background = False
+    )
+    combined_html = "<div>" + "\n<hr>\n".join(html_task_authors) + "</div>"
+
+    html_background_authors = create_html(
+        texts[4:], #last three are background
+        llm_spans_list,
+        gram_spans_list,
+        selected_feature_llm,
+        selected_feature_g2v,
+        short, 
+        background = True
+    )
+    background_html = "<div>" + "\n<hr>\n".join(html_background_authors) + "</div>"
+    return combined_html, background_html
+
+def get_label(label: str, bg_id: int=0) -> str:
+    """
+    Returns a human-readable label for the author.
+    """
+    if label.startswith("Mystery"):
+        return "Mystery Author"
+    elif label.startswith("Candidate"):
+        return label
+    elif label.startswith("Q_author"):
+        return "Mystery Author"
+    elif label.startswith("a0_author") or label.startswith("a1_author") or label.startswith("a2_author"):
+        id = label.split("_")[0][-1] # Get the last character of the first part (a0, a1, a2)
+        return f"Candidate {int(id)+1} Author"
+    else:
+        return f"Background Author {bg_id+1}"
+
+def create_html(texts, llm_spans_list, gram_spans_list, selected_feature_llm, selected_feature_g2v, short, background = False):
     html = []
     for i, (label, txt) in enumerate(texts):
+        label = get_label(label, i) if background else get_label(label)
         combined = highlight_both_spans(txt, llm_spans_list[i], gram_spans_list[i])
         notice = ""
         if selected_feature_llm == "None":
@@ -239,6 +288,4 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
             {combined}
           </div>
         """)
-
-    return "<div>" + "\n<hr>\n".join(html) + "</div>"
-
+    return html

@@ -426,7 +426,8 @@ def app(share=False, use_cluster_feats=False):
 
         combined_btn  = gr.Button("Show Combined Spans")
         combined_html = gr.HTML()
-
+        show_background_checkbox = gr.Checkbox(label="Show spans in background authors", value=False)
+        background_html = gr.HTML(visible=False)
         # print(f"in app: all_feats={feature_list_state.value}")
         # print(f"in app: sel_feat_llm={features_rb.value}")
 
@@ -434,13 +435,21 @@ def app(share=False, use_cluster_feats=False):
         combined_btn.click(
             fn=show_combined_spans_all,
             inputs=[features_rb, gram2vec_rb, llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_zoomed_authors],
-            outputs=[combined_html]
+            outputs=[combined_html, background_html]
         )
         # mapping -->
         # iid = task_dropdown.value
         # sel_feat_llm = features_rb.value
         # all_feats = feature_list_state.value
         # sel_feat_g2v = gram2vec_rb.value
+        # combined_html -> spans/html for task authors
+        # background_html -> spans/html for background authors
+
+        show_background_checkbox.change(
+            fn=lambda show: gr.update(visible=show),
+            inputs=[show_background_checkbox],
+            outputs=[background_html]
+        )
 
     demo.launch(share=share)
 
