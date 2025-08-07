@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
 import re
-from utils.interp_space_utils import compute_clusters_style_representation_2, compute_clusters_g2v_representation
+from utils.interp_space_utils import compute_clusters_style_representation_3, compute_clusters_g2v_representation
 from utils.llm_feat_utils import split_features
 from utils.gram2vec_feat_utils import get_shorthand, get_fullform
 
@@ -231,8 +231,10 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     #     other_cluster_ids=[],
     #     features_clm_name='final_attribute_name_manually_processed'
     # )
+    print(f"Task authors: {len(task_authors_df)}, Clustered authors: {len(clustered_authors_df)}")
     merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
-    style_analysis_response = compute_clusters_style_representation_2(
+    print(f"Merged authors DataFrame:\n{len(merged_authors_df)}")
+    style_analysis_response = compute_clusters_style_representation_3(
         background_corpus_df=merged_authors_df,
         cluster_ids=visible_authors,
         cluster_label_clm_name='authorID',

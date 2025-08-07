@@ -14,6 +14,9 @@ from gram2vec import vectorizer
 from openai import OpenAI
 from openai.lib._pydantic import to_strict_json_schema
 from pydantic import BaseModel
+from pydantic import ValidationError
+import time
+from utils.llm_feat_utils import generate_feature_spans_cached
 
 CACHE_DIR = "datasets/embeddings_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -23,6 +26,13 @@ CACHE_VERSION = 1
 class style_analysis_schema(BaseModel):
     features: list[str]
     spans: dict[str, dict[str, list[str]]]
+
+class FeatureIdentificationSchema(BaseModel):
+    features: list[str]
+
+class SpanExtractionSchema(BaseModel):
+    spans: dict[str, dict[str, list[str]]]  # {author_name: {feature: [spans]}}
+
 
 
 def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd.DataFrame=None, text_clm='fullText') -> pd.DataFrame:
@@ -340,8 +350,11 @@ def compute_clusters_style_representation_2(
     author_texts = background_corpus_df['fullText'].tolist()[:max_num_authors]
     author_texts = "\n\n".join(["""Author {}:\n""".format(i+1) + text for i, text in enumerate(author_texts)])
     author_names = background_corpus_df[cluster_label_clm_name].tolist()[:max_num_authors]
+    print(f"Number of authors: {len(background_corpus_df)}")
     print(author_names)
     print(author_texts)
+    print(f"Number of authors: {len(author_names)}")
+    print(f"Number of authors: {len(author_texts)}")
     
     prompt = f"""First identify a list of {max_num_feats} writing style features that are common between the given texts. Second for every author text and style feature, extract all spans that represent the feature. Output for every author all style features with their spans.
     Author Texts:
@@ -374,6 +387,133 @@ def compute_clusters_style_representation_2(
             pickle.dump(parsed_response, f)
 
     return parsed_response 
+
+def identify_style_features(author_texts: list[str], max_num_feats: int = 5) -> list[str]:
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    prompt = f"""Identify {max_num_feats} writing style features that are commonly found across the following texts. Do not extract spans. Just return the feature names as a list.
+    Author Texts:
+    \"\"\"{chr(10).join(author_texts)}\"\"\"
+    """
+
+    def _make_call():
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "assistant", "content": "You are a forensic linguist specializing in writing styles."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "FeatureIdentificationSchema",
+                    "schema": to_strict_json_schema(FeatureIdentificationSchema)
+                }
+            }
+        )
+        return json.loads(response.choices[0].message.content)
+
+    return retry_call(_make_call, FeatureIdentificationSchema).features
+
+def extract_feature_spans(author_text_map: dict[str, str], features: list[str]) -> dict:
+    author_block = "\n\n".join([f"Author {name}:\n{text}" for name, text in author_text_map.items()])
+    features_str = "\n".join([f"- {f}" for f in features])
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    prompt = f"""Given the following texts and style features, extract all spans that represent each feature in each author's text.
+    Style Features:
+    {features_str}
+
+    Author Texts:
+    \"\"\"{author_block}\"\"\"
+    """
+
+    def _make_call():
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "assistant", "content": "You are a forensic linguist specializing in writing styles."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "SpanExtractionSchema",
+                    "schema": to_strict_json_schema(SpanExtractionSchema)
+                }
+            }
+        )
+        return json.loads(response.choices[0].message.content)
+
+    return retry_call(_make_call, SpanExtractionSchema).spans
+
+def retry_call(call_fn, schema_class, max_attempts=3, wait_sec=2):
+    for attempt in range(max_attempts):
+        try:
+            result = call_fn()
+            # Validate against schema
+            validated = schema_class(**result)
+            return validated
+        except (ValidationError, KeyError, json.JSONDecodeError) as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(wait_sec)
+    raise RuntimeError("All retry attempts failed for OpenAI call.")
+
+def extract_all_spans(authors_df: pd.DataFrame, features: list[str], cluster_label_clm_name: str = 'authorID') -> dict[str, dict[str, list[str]]]:
+    """
+    For each author, use `generate_feature_spans_cached` to get feature->span mappings.
+    Returns a dict: {author_name: {feature: [spans]}}
+    """
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    spans_by_author = {}
+
+    for _, row in authors_df.iterrows():
+        author_name = str(row[cluster_label_clm_name])
+        print(author_name)
+        role = f"{author_name}"
+        full_text = row['fullText']
+        spans = generate_feature_spans_cached(client, full_text, features, role)
+        spans_by_author[author_name] = spans
+
+    return spans_by_author
+
+def compute_clusters_style_representation_3(
+    background_corpus_df: pd.DataFrame,
+    cluster_ids: List[Any],
+    cluster_label_clm_name: str = 'authorID',
+    max_num_feats: int = 5,
+    max_num_documents_per_author=3,
+    max_num_authors=5
+    ):
+
+    print(f"Computing style representation for visible clusters: {len(cluster_ids)}")
+    # STEP 1: Identify features on 5 visible authors
+    background_corpus_df['fullText'] = background_corpus_df['fullText'].map(lambda x: '\n\n'.join(x[:max_num_documents_per_author]) if isinstance(x, list) else x)
+    background_corpus_df_feat_id = background_corpus_df[background_corpus_df[cluster_label_clm_name].isin(cluster_ids)]
+    
+    author_texts = background_corpus_df_feat_id['fullText'].tolist()[:max_num_authors]
+    author_texts = "\n\n".join(["""Author {}:\n""".format(i+1) + text for i, text in enumerate(author_texts)])
+    author_names = background_corpus_df_feat_id[cluster_label_clm_name].tolist()[:max_num_authors]
+    print(f"Number of authors: {len(background_corpus_df_feat_id)}")
+    print(author_names)
+    print(author_texts)
+    print(f"Number of authors: {len(author_names)}")
+    print(f"Number of authors: {len(author_texts)}")
+    features = identify_style_features(author_texts, max_num_feats=max_num_feats)
+
+    # STEP 2: Prepare author pool for span extraction
+
+    span_df = background_corpus_df.iloc[:7]
+    author_names = span_df[cluster_label_clm_name].tolist()[:7]
+    print(f"Number of authors for span detection : {len(span_df)}")
+    print(author_names)
+    spans_by_author = extract_all_spans(span_df, features, cluster_label_clm_name)
+
+    return {
+        "features": features,
+        "spans": spans_by_author
+    }
 
 
 def compute_clusters_g2v_representation(
