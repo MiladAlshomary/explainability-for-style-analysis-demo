@@ -18,6 +18,8 @@ from pydantic import ValidationError
 import time
 from utils.llm_feat_utils import generate_feature_spans_cached
 from collections import Counter
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
 CACHE_DIR = "datasets/embeddings_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -596,6 +598,28 @@ def generate_interpretable_space_representation(interp_space_path, styles_df_pat
 
         
     return clusterd_df
+
+def compute_predicted_author(task_authors_df: pd.DataFrame, col_name: str) -> int:
+    """
+    Computes the predicted author based on the style features.
+    """
+    print("Computing predicted author using LUAR-MUD-style embeddings...")
+
+    # Extract LUAR embeddings from task authors dataframe
+    mystery_embedding = np.array(task_authors_df.iloc[0][col_name]).reshape(1, -1)
+    candidate_embeddings = np.array([
+        task_authors_df.iloc[1][col_name],
+        task_authors_df.iloc[2][col_name],
+        task_authors_df.iloc[3][col_name]
+    ])
+
+    # Compute cosine similarities
+    similarities = cosine_similarity(mystery_embedding, candidate_embeddings)[0]
+    predicted_author = int(np.argmax(similarities))
+    print(f"Predicted author is Candidate {predicted_author + 1}")
+
+    return predicted_author
+
 
 if __name__ == "__main__":
     background_corpus = pd.read_pickle('../datasets/luar_interp_space_cluster_19/train_authors.pkl')

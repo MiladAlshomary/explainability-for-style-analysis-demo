@@ -1,7 +1,7 @@
 import gradio as gr
 import pandas as pd
 from utils.visualizations import load_instance, get_instances, clean_text
-from utils.interp_space_utils import cached_generate_style_embedding, instance_to_df, compute_g2v_features
+from utils.interp_space_utils import cached_generate_style_embedding, instance_to_df, compute_g2v_features, compute_predicted_author
 
 
 # ── Global CSS to be prepended to every block ─────────────────────────────────
@@ -99,7 +99,6 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         c3_txt = data['a2_fullText']
         candidate_texts = [c1_txt, c2_txt, c3_txt]
 
-        header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, ground_truth_author)
         #create a dataframe of the task authors
         task_authors_df  = instance_to_df(instances[iid])
         print(f"\n\n\n ----> Loaded task {iid} with {len(task_authors_df)} authors\n\n\n")
@@ -111,13 +110,8 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         c2_txt = read_txt(cand2_file)
         c3_txt = read_txt(cand3_file)
         candidate_texts = [c1_txt, c2_txt, c3_txt]
-        predicted_author = None  # Placeholder for predicted author
-        header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, true_author)
-        # task_authors_df = pd.DataFrame({
-        #         'role': ['mystery', 'candidate1', 'candidate2', 'candidate3'],
-        #         'fullText': [mystery_txt, c1_txt, c2_txt, c3_txt],
-
-        #     })
+        ground_truth_author = true_author
+        print(f"Ground truth author: {ground_truth_author} ; {true_author}")
         custom_task_instance = {
             'Q_fullText': mystery_txt,
             'a0_fullText': c1_txt,
@@ -126,12 +120,7 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         }
         task_authors_df  = instance_to_df(custom_task_instance)
         print(task_authors_df)
-    #try:
-    # Generate the embeddings for the custom task authors
-    # task_authors_df = generate_style_embedding(task_authors_df, 'fullText', model_name)
-    # # Generate the new embedding of all the background_df authors
-    # background_df = generate_style_embedding(background_df, 'fullText', model_name)
-    # print(f"Generated embeddings for {len(background_df)} texts using model '{model_name}'")
+    
     print(f"Generating embeddings for {model_name} on task authors")
     task_authors_df = cached_generate_style_embedding(task_authors_df, 'fullText', model_name)
     print("Task authors after embedding generation:")
@@ -149,8 +138,13 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
     print(f"Gram2Vec feature generation complete")
 
     print(background_df.columns)
-    # except Exception as e:
-    #     print(f"Embedding generation failed: {e}")
+
+    # Computing predicted author by checking pairwise cosine similarity over luar embeddings
+    col_name = f'{model_name.split("/")[-1]}_style_embedding'
+    predicted_author = compute_predicted_author(task_authors_df, col_name) 
+    
+    #generating html for the task
+    header_html, mystery_html, candidate_htmls = task_HTML(mystery_txt, candidate_texts, predicted_author, ground_truth_author)
     
     return [
         header_html,
@@ -164,6 +158,8 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         c3_txt,
         task_authors_df,
         background_df,
+        predicted_author,
+        ground_truth_author
     ]
 
 def task_HTML(mystery_text, candidate_texts, predicted_author, ground_truth_author):
@@ -172,7 +168,7 @@ def task_HTML(mystery_text, candidate_texts, predicted_author, ground_truth_auth
       <h3>Here’s the mystery passage alongside three candidate texts—look for the green highlight to see the predicted author.</h3>
     </div>
     """
-    mystery_text = clean_text(mystery_text)
+    # mystery_text = clean_text(mystery_text)
     mystery_html = f"""
     <div style="
             border: 2px solid #ff5722;      /* accent border */
@@ -185,6 +181,8 @@ def task_HTML(mystery_text, candidate_texts, predicted_author, ground_truth_auth
         <p>{clean_text(mystery_text)}</p>
     </div>
     """
+
+    print(f"Predicted author: {predicted_author}, Ground truth author: {ground_truth_author}")
 
     # Candidate boxes
     candidate_htmls = []

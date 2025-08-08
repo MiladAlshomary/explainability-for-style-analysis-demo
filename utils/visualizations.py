@@ -20,7 +20,7 @@ def clean_text(text: str) -> str:
     """
     Cleans the text by replacing HTML tags with their escaped versions.
     """
-    return text.replace('<','&lt;').replace('>','&gt;')
+    return text.replace('<','&lt;').replace('>','&gt;').replace('\n', '<br>')
 
 def get_instances(instances_to_explain_path: str = 'datasets/instances_to_explain.json'):
     """
@@ -278,7 +278,7 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
-def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df):
+def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df, pred_idx=None, gt_idx=None):
     model_name = model_radio if model_radio != "Other" else custom_model_input
     embedding_col_name = f'{model_name.split("/")[-1]}_style_embedding'
     print(background_authors_embeddings_df.columns)
@@ -308,8 +308,6 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
     print(f"q_lat shape: {q_lat.shape}")
     c_lat = np.array(task_authors_df[embedding_col_name].iloc[1:].tolist())  # Candidate authors latents
     print(f"c_lat shape: {c_lat.shape}")
-    pred_idx     = None  # Index of the predicted author placeholder for now
-    gt_idx       = None  # Index of the ground truth author placeholder for now
 
     # cent_emb = np.array([v for _,v in dim2lat.items()])
     # cent_lbl = np.array([k for k,_ in dim2lat.items()])
