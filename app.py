@@ -417,7 +417,7 @@ def app(share=False, use_cluster_feats=False):
         else:
 
             axis_ranges.change(
-                fn=handle_zoom, 
+                fn=handle_zoom_with_retries, 
                 inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df, task_authors_embeddings_df], 
                 outputs=[features_rb, gram2vec_rb , llm_style_feats_analysis, feature_list_state, visible_zoomed_authors]
             )

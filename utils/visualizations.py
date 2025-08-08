@@ -204,14 +204,14 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     print("[INFO] Handling zoom event")
 
     if not event_json:
-        return gr.update(value="")
+        return gr.update(value=""), gr.update(value=""), None, None, None
 
     try:
         ranges = json.loads(event_json)
         (x_min, x_max) = ranges["xaxis"]
         (y_min, y_max) = ranges["yaxis"]
     except (json.JSONDecodeError, KeyError, ValueError):
-        return gr.update(value="")
+        return gr.update(value=""), gr.update(value=""), None, None, None
 
     # Find points within the zoomed region
     mask = (
@@ -277,6 +277,32 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
         visible_authors
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
+
+def handle_zoom_with_retries(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df):
+    """
+    event_json         – stringified JSON from JS listener
+    bg_proj            – (N,2) numpy array with 2D coordinates
+    bg_lbls            – list of N author IDs
+    clustered_authors_df – pd.DataFrame containing authorID and final_attribute_name
+    task_authors_df   – pd.DataFrame containing authorID and final_attribute_name
+    """
+    print("[INFO] Handling zoom event with retries")
+
+    for attempt in range(3):
+        try:
+            return handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df)
+        except Exception as e:
+            print(f"[ERROR] Attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                print("[INFO] Retrying...")
+    return (
+        None,
+        None,
+        None,
+        None,
+        None
+    )
+
 
 def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df, pred_idx=None, gt_idx=None):
     model_name = model_radio if model_radio != "Other" else custom_model_input
