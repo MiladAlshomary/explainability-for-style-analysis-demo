@@ -7,6 +7,10 @@ from utils.gram2vec_feat_utils import *
 from utils.interp_space_utils import *
 from utils.ui import *
 
+import os
+os.environ["GRADIO_TEMP_DIR"] = "./datasets/temp"  # Set a custom temp directory for Gradio
+os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
+
 import yaml
 import argparse
 
@@ -26,6 +30,19 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ── load once at startup ────────────────────────────────────────
 GRAM2VEC_SHORTHAND = load_code_map()  
+
+def validate_ground_truth(gt1, gt2, gt3):
+    selected = [gt1, gt2, gt3]
+    selected_count = sum(selected)
+
+    if selected_count > 1:
+        return None, "Please select only one ground truth author."
+    elif selected_count == 0:
+        return None, "No ground truth author selected."
+
+    index = selected.index(True)
+    return index, f"Candidate {index+1} is marked as the ground truth author."
+
 
 def app(share=False, use_cluster_feats=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
@@ -65,10 +82,10 @@ def app(share=False, use_cluster_feats=False):
             gap:3em;
             margin-top:1em;
             ">
-            <!-- CLUSTER -->
+            <!-- Visualize -->
             <div style="max-width:200px;">
                 <div style="font-size:2em;">🔍</div>
-                <h4 style="margin:0.2em 0;">Cluster</h4>
+                <h4 style="margin:0.2em 0;">Visualize</h4>
                 <p style="margin:0; font-size:1em; line-height:1.3;">
                 Place your AA task with respect to other background authors.
                 </p>
@@ -140,6 +157,9 @@ def app(share=False, use_cluster_feats=False):
             value="Predefined HRS Task",
             label="Select Task Source"
         )
+
+        ground_truth_author = gr.State()  # To store the index of the ground truth author
+
         with gr.Column():
             with gr.Column(visible=True) as predefined_container:
                 gr.HTML("""
@@ -167,9 +187,27 @@ def app(share=False, use_cluster_feats=False):
                     </div>
                     """)
                 mystery_input   = gr.File(label="Mystery (.txt)", file_types=['.txt'])
-                candidate1 = gr.File(label="Candidate1 (.txt)", file_types=['.txt'])
-                candidate2 = gr.File(label="Candidate2 (.txt)", file_types=['.txt'])
-                candidate3 = gr.File(label="Candidate3 (.txt)", file_types=['.txt'])
+                with gr.Row():
+                    candidate1 = gr.File(label="Candidate 1 (.txt)", file_types=['.txt'])
+                    gt1_checkbox = gr.Checkbox(label="Ground Truth?", value=False)
+
+                with gr.Row():
+                    candidate2 = gr.File(label="Candidate 2 (.txt)", file_types=['.txt'])
+                    gt2_checkbox = gr.Checkbox(label="Ground Truth?", value=False)
+
+                with gr.Row():
+                    candidate3 = gr.File(label="Candidate 3 (.txt)", file_types=['.txt'])
+                    gt3_checkbox = gr.Checkbox(label="Ground Truth?", value=False)
+                
+                validation_msg = gr.Textbox(label="Validation Result", interactive=False)
+                
+            for checkbox in [gt1_checkbox, gt2_checkbox, gt3_checkbox]:
+                checkbox.change(
+                    fn=validate_ground_truth,
+                    inputs=[gt1_checkbox, gt2_checkbox, gt3_checkbox],
+                    outputs=[ground_truth_author, validation_msg]
+                )
+
         
         # ── Load Task Button ─────────────────────────────────────
         gr.HTML(instruction_callout("Click the button below to load the tasks and generate embeddings using selected model."))
@@ -197,8 +235,13 @@ def app(share=False, use_cluster_feats=False):
             outputs=[predefined_container, custom_container]
         )
         # ── Wire call to load task and generate embeddings once load button is clicked ───────────────────
+        predicted_author = gr.State()  # Store predicted author from the embeddings
         load_button.click(
-            fn=lambda mode, dropdown, mystery, c1, c2, c3, model_radio, custom_model_input: 
+            fn=lambda: gr.update(value="⏳ Loading... Please wait", interactive=False),
+            inputs=[],
+            outputs=[load_button]
+        ).then(
+            fn=lambda mode, dropdown, mystery, c1, c2, c3, ground_truth_author, model_radio, custom_model_input: 
             update_task_display(
                 mode,
                 dropdown,
@@ -208,16 +251,20 @@ def app(share=False, use_cluster_feats=False):
                 c1,
                 c2,
                 c3,
-                None,            # true_author placeholder
+                ground_truth_author,            # true_author placeholder
                 model_radio,
                 custom_model_input
             ),
-            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, model_radio, custom_model],
-            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df]  # embeddings_df is a placeholder for now
+            inputs=[task_mode, task_dropdown, mystery_input, candidate1, candidate2, candidate3, ground_truth_author, model_radio, custom_model],
+            outputs=[header, mystery, c0, c1, c2, mystery_state, c0_state, c1_state, c2_state, task_authors_embeddings_df, background_authors_embeddings_df, predicted_author, ground_truth_author]  # embeddings_df is a placeholder for now
+        ).then(
+            fn=lambda: gr.update(value="Load Task & Generate Embeddings", interactive=True),
+            inputs=[],
+            outputs=[load_button]
         )
 
-        # ── Visualization for clusters ─────────────────────────────
-        gr.HTML(instruction_callout("Run visualization to see which author cluster contains the mystery document."))
+        # ── Visualization for features ─────────────────────────────
+        gr.HTML(instruction_callout("Run visualization to see which author is similar to the mystery document."))
         run_btn   = gr.Button("Run visualization")
         bg_proj_state = gr.State()
         bg_lbls_state = gr.State()
@@ -226,8 +273,8 @@ def app(share=False, use_cluster_feats=False):
             with gr.Column(scale=3):
                 axis_ranges = gr.Textbox(visible=False, elem_id="axis-ranges")
                 plot = gr.Plot(
-                    label="Cluster Visualization",
-                    elem_id="cluster-plot",
+                    label="Visualization",
+                    elem_id="feature-plot",
                 )
                 plot.change(
                     fn=None,
@@ -241,7 +288,7 @@ def app(share=False, use_cluster_feats=False):
                         const maxAttempts = 50;
 
                         const tryAttach = () => {
-                            const gd = document.querySelector('#cluster-plot .js-plotly-plot');
+                            const gd = document.querySelector('#feature-plot .js-plotly-plot');
                             if (!gd) {
                                 if (++attempts < maxAttempts) {
                                     requestAnimationFrame(tryAttach);
@@ -296,10 +343,11 @@ def app(share=False, use_cluster_feats=False):
                     <p>
                     This plot shows the mystery author (★) and three candidate authors (◆) 
                     in the AA model’s latent space.<br>
-                    Grey ▲ are identified salient regions in the AA model's space—each has a specific writing style. 
-                    Hover over the ▲ to see the top 10 writing style features<br>
-                    Place your mystery text in this space to see which author‐cluster it falls into, 
-                    then zoom in on a centroid to inspect its top style features.
+                    The grey ● symbols represent the background corpus—real authors with diverse writing styles. 
+                    You can zoom in on any region of the plot. The system will analyze the visible authors 
+                    in that area and list the most representative writing style features for the zoomed-in region.<br>
+                    Use this to compare your mystery text’s position against nearby writing styles and
+                    investigate which features distinguish it from others.
                     </p>
                 """
                 gr.HTML(styled_html(expl_html))
@@ -326,10 +374,10 @@ def app(share=False, use_cluster_feats=False):
                         font-weight: 600;
                         margin-bottom: 0.5em;
                     ">
-                        LLM-derived style  features prominent in the selected cluster
+                        LLM-derived style  features prominent in the zoomed-in region
                     </div>
                     """)
-                features_rb = gr.Radio(choices=[], label="LLM-derived style features for this cluster")#, label="Features from the cluster closest to the Mystery Author", info="LLM-derived style features for this cluster")
+                features_rb = gr.Radio(choices=[], label="LLM-derived style features for this zoomed-in region")#, label="Features from the cluster closest to the Mystery Author", info="LLM-derived style features for this cluster")
                 feature_list_state = gr.State() 
 
             # ── Gram2Vec Features Column ─────────────────────────────
@@ -341,19 +389,19 @@ def app(share=False, use_cluster_feats=False):
                         font-weight: 600;
                         margin-bottom: 0.5em;
                     ">
-                        Gram2Vec Features prominent in the selected cluster
+                        Gram2Vec Features prominent in the zoomed-in region
                     </div>
                     """)
-                gram2vec_rb    = gr.Radio(choices=[], label="Gram2Vec features for this cluster")#, label="Top-10 Gram2Vec Features most likely to occur in Mystery Author", info="Most prominent Gram2Vec features in the mystery text")
+                gram2vec_rb    = gr.Radio(choices=[], label="Gram2Vec features for this zoomed-in region")#, label="Top-10 Gram2Vec Features most likely to occur in Mystery Author", info="Most prominent Gram2Vec features in the mystery text")
                 gram2vec_state = gr.State()
 
         # ── Visualization button click ───────────────────────────────
         run_btn.click(
-            fn=lambda iid, model_radio, custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df: visualize_clusters_plotly(
+            fn=lambda iid, model_radio, custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df, predicted_author, ground_truth_author: visualize_clusters_plotly(
                 int(iid.replace('Task ','')), cfg, instances, model_radio,
-                custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df
+                custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df, predicted_author, ground_truth_author
             ),
-            inputs=[task_dropdown, model_radio, custom_model, task_authors_embeddings_df, background_authors_embeddings_df],
+            inputs=[task_dropdown, model_radio, custom_model, task_authors_embeddings_df, background_authors_embeddings_df, predicted_author, ground_truth_author],
             outputs=[plot, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
         )
         
@@ -369,7 +417,7 @@ def app(share=False, use_cluster_feats=False):
         else:
 
             axis_ranges.change(
-                fn=handle_zoom, 
+                fn=handle_zoom_with_retries, 
                 inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df, task_authors_embeddings_df], 
                 outputs=[features_rb, gram2vec_rb , llm_style_feats_analysis, feature_list_state, visible_zoomed_authors]
             )
@@ -417,21 +465,37 @@ def app(share=False, use_cluster_feats=False):
 
         combined_btn  = gr.Button("Show Combined Spans")
         combined_html = gr.HTML()
-
+        show_background_checkbox = gr.Checkbox(label="Show spans in background authors", value=False)
+        background_html = gr.HTML(visible=False)
         # print(f"in app: all_feats={feature_list_state.value}")
         # print(f"in app: sel_feat_llm={features_rb.value}")
 
 
         combined_btn.click(
             fn=show_combined_spans_all,
-            inputs=[features_rb, gram2vec_rb, llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_zoomed_authors],
-            outputs=[combined_html]
+            inputs=[features_rb, 
+                    gram2vec_rb, 
+                    llm_style_feats_analysis, 
+                    background_authors_embeddings_df, 
+                    task_authors_embeddings_df, 
+                    visible_zoomed_authors, 
+                    predicted_author, 
+                    ground_truth_author],
+            outputs=[combined_html, background_html]
         )
         # mapping -->
         # iid = task_dropdown.value
         # sel_feat_llm = features_rb.value
         # all_feats = feature_list_state.value
         # sel_feat_g2v = gram2vec_rb.value
+        # combined_html -> spans/html for task authors
+        # background_html -> spans/html for background authors
+
+        show_background_checkbox.change(
+            fn=lambda show: gr.update(visible=show),
+            inputs=[show_background_checkbox],
+            outputs=[background_html]
+        )
 
     demo.launch(share=share)
 
@@ -439,4 +503,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_cluster_feats", action="store_true", help="Use cluster-based selection for features")
     args = parser.parse_args()
-    app(share=False, use_cluster_feats=args.use_cluster_feats)
+    app(share=True, use_cluster_feats=args.use_cluster_feats)

@@ -14,6 +14,12 @@ from gram2vec import vectorizer
 from openai import OpenAI
 from openai.lib._pydantic import to_strict_json_schema
 from pydantic import BaseModel
+from pydantic import ValidationError
+import time
+from utils.llm_feat_utils import generate_feature_spans_cached
+from collections import Counter
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
 CACHE_DIR = "datasets/embeddings_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -24,6 +30,13 @@ class style_analysis_schema(BaseModel):
     features: list[str]
     spans: dict[str, dict[str, list[str]]]
 
+class FeatureIdentificationSchema(BaseModel):
+    features: list[str]
+
+class SpanExtractionSchema(BaseModel):
+    spans: dict[str, dict[str, list[str]]]  # {author_name: {feature: [spans]}}
+
+
 
 def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd.DataFrame=None, text_clm='fullText') -> pd.DataFrame:
     """
@@ -31,11 +44,20 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
     This effectively creates a mapping from each author to their vector.
     """
     if task_authors_df is not None:
+        print (f"concatenating task authors and background corpus authors")
+        print(f"Number of task authors: {len(task_authors_df)}")
+        print(f"task authors author_ids: {task_authors_df.authorID.tolist()}")
+        print(f"task authors -->")
+        print(task_authors_df)
+        print(f"Number of background corpus authors: {len(clustered_authors_df)}")
         clustered_authors_df = pd.concat([task_authors_df, clustered_authors_df])
+        print(f"Number of authors after concatenation: {len(clustered_authors_df)}")
 
     # Gather the input texts (preserves list-of-strings if any)
     #texts = background_corpus_df[text_clm].fillna("").tolist()
     author_texts = ['\n\n'.join(x) for x in clustered_authors_df.fullText.tolist()]
+
+    print(f"Number of author_texts: {len(author_texts)}")
 
     # Create a reproducible JSON serialization of the texts
     serialized = json.dumps({
@@ -55,13 +77,30 @@ def compute_g2v_features(clustered_authors_df: pd.DataFrame, task_authors_df: pd
     
     else: # Else compute and cache
         g2v_feats_df = vectorizer.from_documents(author_texts, batch_size=16)
+
+        print(f"Number of g2v features: {len(g2v_feats_df)}")
+        print(f"Number of clustered_authors_df.authorID.tolist(): {len(clustered_authors_df.authorID.tolist())}")
+        print(f"Number of g2v_feats_df.to_numpy().tolist(): {len(g2v_feats_df.to_numpy().tolist())}")
+
+        ids = clustered_authors_df.authorID.tolist()
+        counter = Counter(ids)
+        duplicates = [k for k, v in counter.items() if v > 1]
+
+        print(f"Duplicate authorIDs: {duplicates}")
+        print(f"Number of duplicates: {len(ids) - len(set(ids))}")
+
         author_to_g2v_feats = {x[0]: x[1] for x in zip(clustered_authors_df.authorID.tolist(), g2v_feats_df.to_numpy().tolist())}
+
+        print(f"Number of authors with g2v features: {len(author_to_g2v_feats)}")
 
         # apply normalization
         vector_std  = np.std(list(author_to_g2v_feats.values()), axis=0)
         vector_mean = np.mean(list(author_to_g2v_feats.values()), axis=0)
         vector_std[vector_std == 0] = 1.0
         author_to_g2v_feats_z_normalized = {x[0]: (x[1] - vector_mean) / vector_std for x in author_to_g2v_feats.items()}
+
+        print(f"Number of authors with g2v features normalized: {len(author_to_g2v_feats_z_normalized)}")
+        print(f" len of clustered authors df: {len(clustered_authors_df)}")
         
 
         # Add the vectors as a new column of the DataFrame.
@@ -210,6 +249,7 @@ def cached_generate_style_embedding(background_corpus_df: pd.DataFrame,
     # If cache hit, load and return
     if os.path.exists(cache_path):
         print(f"Cache hit for {model_name} on column '{text_clm}'")
+        print(cache_path)
         with open(cache_path, "rb") as f:
             return pickle.load(f)
 
@@ -340,8 +380,11 @@ def compute_clusters_style_representation_2(
     author_texts = background_corpus_df['fullText'].tolist()[:max_num_authors]
     author_texts = "\n\n".join(["""Author {}:\n""".format(i+1) + text for i, text in enumerate(author_texts)])
     author_names = background_corpus_df[cluster_label_clm_name].tolist()[:max_num_authors]
+    print(f"Number of authors: {len(background_corpus_df)}")
     print(author_names)
     print(author_texts)
+    print(f"Number of authors: {len(author_names)}")
+    print(f"Number of authors: {len(author_texts)}")
     
     prompt = f"""First identify a list of {max_num_feats} writing style features that are common between the given texts. Second for every author text and style feature, extract all spans that represent the feature. Output for every author all style features with their spans.
     Author Texts:
@@ -374,6 +417,100 @@ def compute_clusters_style_representation_2(
             pickle.dump(parsed_response, f)
 
     return parsed_response 
+
+def identify_style_features(author_texts: list[str], max_num_feats: int = 5) -> list[str]:
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    prompt = f"""Identify {max_num_feats} writing style features that are commonly found across the following texts. Do not extract spans. Just return the feature names as a list.
+    Author Texts:
+    \"\"\"{chr(10).join(author_texts)}\"\"\"
+    """
+
+    def _make_call():
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "assistant", "content": "You are a forensic linguist specializing in writing styles."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "FeatureIdentificationSchema",
+                    "schema": to_strict_json_schema(FeatureIdentificationSchema)
+                }
+            }
+        )
+        return json.loads(response.choices[0].message.content)
+
+    return retry_call(_make_call, FeatureIdentificationSchema).features
+
+def retry_call(call_fn, schema_class, max_attempts=3, wait_sec=2):
+    for attempt in range(max_attempts):
+        try:
+            result = call_fn()
+            # Validate against schema
+            validated = schema_class(**result)
+            return validated
+        except (ValidationError, KeyError, json.JSONDecodeError) as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(wait_sec)
+    raise RuntimeError("All retry attempts failed for OpenAI call.")
+
+def extract_all_spans(authors_df: pd.DataFrame, features: list[str], cluster_label_clm_name: str = 'authorID') -> dict[str, dict[str, list[str]]]:
+    """
+    For each author, use `generate_feature_spans_cached` to get feature->span mappings.
+    Returns a dict: {author_name: {feature: [spans]}}
+    """
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    spans_by_author = {}
+
+    for _, row in authors_df.iterrows():
+        author_name = str(row[cluster_label_clm_name])
+        print(author_name)
+        role = f"{author_name}"
+        full_text = row['fullText']
+        spans = generate_feature_spans_cached(client, full_text, features, role)
+        spans_by_author[author_name] = spans
+
+    return spans_by_author
+
+def compute_clusters_style_representation_3(
+    background_corpus_df: pd.DataFrame,
+    cluster_ids: List[Any],
+    cluster_label_clm_name: str = 'authorID',
+    max_num_feats: int = 5,
+    max_num_documents_per_author=3,
+    max_num_authors=5
+    ):
+
+    print(f"Computing style representation for visible clusters: {len(cluster_ids)}")
+    # STEP 1: Identify features on 5 visible authors
+    background_corpus_df['fullText'] = background_corpus_df['fullText'].map(lambda x: '\n\n'.join(x[:max_num_documents_per_author]) if isinstance(x, list) else x)
+    background_corpus_df_feat_id = background_corpus_df[background_corpus_df[cluster_label_clm_name].isin(cluster_ids)]
+    
+    author_texts = background_corpus_df_feat_id['fullText'].tolist()[:max_num_authors]
+    author_texts = "\n\n".join(["""Author {}:\n""".format(i+1) + text for i, text in enumerate(author_texts)])
+    author_names = background_corpus_df_feat_id[cluster_label_clm_name].tolist()[:max_num_authors]
+    print(f"Number of authors: {len(background_corpus_df_feat_id)}")
+    print(author_names)
+    print(author_texts)
+    print(f"Number of authors: {len(author_names)}")
+    print(f"Number of authors: {len(author_texts)}")
+    features = identify_style_features(author_texts, max_num_feats=max_num_feats)
+
+    # STEP 2: Prepare author pool for span extraction
+
+    span_df = background_corpus_df.iloc[:7]
+    author_names = span_df[cluster_label_clm_name].tolist()[:7]
+    print(f"Number of authors for span detection : {len(span_df)}")
+    print(author_names)
+    spans_by_author = extract_all_spans(span_df, features, cluster_label_clm_name)
+
+    return {
+        "features": features,
+        "spans": spans_by_author
+    }
 
 
 def compute_clusters_g2v_representation(
@@ -461,6 +598,28 @@ def generate_interpretable_space_representation(interp_space_path, styles_df_pat
 
         
     return clusterd_df
+
+def compute_predicted_author(task_authors_df: pd.DataFrame, col_name: str) -> int:
+    """
+    Computes the predicted author based on the style features.
+    """
+    print("Computing predicted author using LUAR-MUD-style embeddings...")
+
+    # Extract LUAR embeddings from task authors dataframe
+    mystery_embedding = np.array(task_authors_df.iloc[0][col_name]).reshape(1, -1)
+    candidate_embeddings = np.array([
+        task_authors_df.iloc[1][col_name],
+        task_authors_df.iloc[2][col_name],
+        task_authors_df.iloc[3][col_name]
+    ])
+
+    # Compute cosine similarities
+    similarities = cosine_similarity(mystery_embedding, candidate_embeddings)[0]
+    predicted_author = int(np.argmax(similarities))
+    print(f"Predicted author is Candidate {predicted_author + 1}")
+
+    return predicted_author
+
 
 if __name__ == "__main__":
     background_corpus = pd.read_pickle('../datasets/luar_interp_space_cluster_19/train_authors.pkl')

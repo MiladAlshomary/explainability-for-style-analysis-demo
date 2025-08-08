@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
 import re
-from utils.interp_space_utils import compute_clusters_style_representation_2, compute_clusters_g2v_representation
+from utils.interp_space_utils import compute_clusters_style_representation_3, compute_clusters_g2v_representation
 from utils.llm_feat_utils import split_features
 from utils.gram2vec_feat_utils import get_shorthand, get_fullform
 
@@ -20,7 +20,7 @@ def clean_text(text: str) -> str:
     """
     Cleans the text by replacing HTML tags with their escaped versions.
     """
-    return text.replace('<','&lt;').replace('>','&gt;')
+    return text.replace('<','&lt;').replace('>','&gt;').replace('\n', '<br>')
 
 def get_instances(instances_to_explain_path: str = 'datasets/instances_to_explain.json'):
     """
@@ -204,14 +204,14 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     print("[INFO] Handling zoom event")
 
     if not event_json:
-        return gr.update(value="")
+        return gr.update(value=""), gr.update(value=""), None, None, None
 
     try:
         ranges = json.loads(event_json)
         (x_min, x_max) = ranges["xaxis"]
         (y_min, y_max) = ranges["yaxis"]
     except (json.JSONDecodeError, KeyError, ValueError):
-        return gr.update(value="")
+        return gr.update(value=""), gr.update(value=""), None, None, None
 
     # Find points within the zoomed region
     mask = (
@@ -231,8 +231,10 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     #     other_cluster_ids=[],
     #     features_clm_name='final_attribute_name_manually_processed'
     # )
+    print(f"Task authors: {len(task_authors_df)}, Clustered authors: {len(clustered_authors_df)}")
     merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
-    style_analysis_response = compute_clusters_style_representation_2(
+    print(f"Merged authors DataFrame:\n{len(merged_authors_df)}")
+    style_analysis_response = compute_clusters_style_representation_3(
         background_corpus_df=merged_authors_df,
         cluster_ids=visible_authors,
         cluster_label_clm_name='authorID',
@@ -276,7 +278,33 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
-def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df):
+def handle_zoom_with_retries(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df):
+    """
+    event_json         – stringified JSON from JS listener
+    bg_proj            – (N,2) numpy array with 2D coordinates
+    bg_lbls            – list of N author IDs
+    clustered_authors_df – pd.DataFrame containing authorID and final_attribute_name
+    task_authors_df   – pd.DataFrame containing authorID and final_attribute_name
+    """
+    print("[INFO] Handling zoom event with retries")
+
+    for attempt in range(3):
+        try:
+            return handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df)
+        except Exception as e:
+            print(f"[ERROR] Attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                print("[INFO] Retrying...")
+    return (
+        None,
+        None,
+        None,
+        None,
+        None
+    )
+
+
+def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df, pred_idx=None, gt_idx=None):
     model_name = model_radio if model_radio != "Other" else custom_model_input
     embedding_col_name = f'{model_name.split("/")[-1]}_style_embedding'
     print(background_authors_embeddings_df.columns)
@@ -306,8 +334,6 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
     print(f"q_lat shape: {q_lat.shape}")
     c_lat = np.array(task_authors_df[embedding_col_name].iloc[1:].tolist())  # Candidate authors latents
     print(f"c_lat shape: {c_lat.shape}")
-    pred_idx     = None  # Index of the predicted author placeholder for now
-    gt_idx       = None  # Index of the ground truth author placeholder for now
 
     # cent_emb = np.array([v for _,v in dim2lat.items()])
     # cent_lbl = np.array([k for k,_ in dim2lat.items()])
