@@ -1,7 +1,11 @@
 # config.yaml
 instances_to_explain_path: "./datasets/hrs_explanations.json"
+instances_to_explain_url: "./datasets/hrs_explanations.json"
 interp_space_path:    "./datasets/luar_interp_space_cluster_19/"
+interp_space_url:    "./datasets/luar_interp_space_cluster_19/"
 gram2vec_feats_path:      "./datasets/gram2vec_feats.csv"
+gram2vec_feats_url:      "./datasets/gram2vec_feats.csv"
+
 style_feat_clm:       "llm_tfidf_weights"
 top_k:                10
 only_llm_feats:       false

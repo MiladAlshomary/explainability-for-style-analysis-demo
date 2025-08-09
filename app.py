@@ -9,9 +9,45 @@ from utils.ui import *
 
 import yaml
 import argparse
+import os
+import urllib.request
+from tqdm import tqdm
 
 from dotenv import load_dotenv  
 from openai import OpenAI
+
+
+# --- File Download Logic ---
+
+class TqdmUpTo(tqdm):
+    """Provides `update_to(block_num, block_size, total_size)`."""
+    def update_to(self, b=1, bsize=1, tsize=None):
+        if tsize is not None:
+            self.total = tsize
+        self.update(b * bsize - self.n)
+
+def download_file_if_not_exists(url, dest_path):
+    """Download a file from a URL if it doesn't exist at the destination path."""
+    dest_dir = os.path.dirname(dest_path)
+    if dest_dir:
+        os.makedirs(dest_dir, exist_ok=True)
+
+    if not os.path.exists(dest_path):
+        print(f"File not found at {dest_path}. Downloading...")
+        filename = os.path.basename(dest_path)
+        try:
+            with TqdmUpTo(unit='B', unit_scale=True, unit_divisor=1024, miniters=1,
+                          desc=filename) as t:
+                urllib.request.urlretrieve(url, filename=dest_path, reporthook=t.update_to)
+            print(f"Successfully downloaded {filename}.")
+        except Exception as e:
+            print(f"Error downloading {filename}: {e}")
+            if os.path.exists(dest_path):
+                os.remove(dest_path) # Clean up partial download
+    else:
+        print(f"File already exists at {dest_path}. Skipping download.")
+
+# --- End File Download Logic ---
 
 def load_config(path="config/config.yaml"):
     with open(path, "r") as f:
@@ -19,6 +55,10 @@ def load_config(path="config/config.yaml"):
     
 cfg = load_config()
 
+
+download_file_if_not_exists(cfg.get('interp_space_url'), cfg.get('interp_space_path'))
+download_file_if_not_exists(cfg.get('instances_to_explain_url'), cfg.get('instances_to_explain_path'))
+download_file_if_not_exists(cfg.get('gram2vec_feats_url'), cfg.get('gram2vec_feats_path'))
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
