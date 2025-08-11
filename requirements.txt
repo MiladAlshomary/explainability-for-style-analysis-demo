@@ -9,4 +9,5 @@ python-dotenv
 gradio
 pyyaml
 plotly
+sentence_transformers
 git+https://github.com/MiladAlshomary/gram2vec
