@@ -21,7 +21,6 @@ import pickle
 
 import IPython.display as display
 from IPython.display import display, Javascript, HTML
-import ipywidgets as widgets
 
 from openai import OpenAI
 import os

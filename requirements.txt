@@ -1,9 +1,6 @@
 nltk
 spacy
 scikit-learn
-ipympl
-ipywidgets
-matplotlib
 openai
 python-dotenv
 gradio==5.30
