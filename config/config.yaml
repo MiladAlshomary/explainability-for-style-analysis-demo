@@ -1,7 +1,11 @@
 # config.yaml
 instances_to_explain_path: "./datasets/hrs_explanations.json"
+instances_to_explain_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/raw/main/hrs_explanations.json?download"
 interp_space_path:    "./datasets/luar_interp_space_cluster_19/"
+interp_space_url:    "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/luar_interp_space_cluster.zip?download=true"
 gram2vec_feats_path:      "./datasets/gram2vec_feats.csv"
+gram2vec_feats_url:      "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/gram2vec_feats.csv?download=true"
+
 style_feat_clm:       "llm_tfidf_weights"
 top_k:                10
 only_llm_feats:       false

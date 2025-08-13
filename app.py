@@ -1,11 +1,6 @@
 import gradio as gr
 import json
 
-from utils.visualizations import *
-from utils.llm_feat_utils import *
-from utils.gram2vec_feat_utils import *
-from utils.interp_space_utils import *
-from utils.ui import *
 
 import os
 os.environ["GRADIO_TEMP_DIR"] = "./datasets/temp"  # Set a custom temp directory for Gradio
@@ -13,9 +8,14 @@ os.makedirs(os.environ["GRADIO_TEMP_DIR"], exist_ok=True)
 
 import yaml
 import argparse
+import os
+import urllib.request
+from tqdm import tqdm
 
 from dotenv import load_dotenv  
 from openai import OpenAI
+from utils.file_download import download_file_override
+
 
 def load_config(path="config/config.yaml"):
     with open(path, "r") as f:
@@ -23,6 +23,16 @@ def load_config(path="config/config.yaml"):
     
 cfg = load_config()
 
+
+download_file_override(cfg.get('interp_space_url'), cfg.get('interp_space_path'))
+download_file_override(cfg.get('instances_to_explain_url'), cfg.get('instances_to_explain_path'))
+download_file_override(cfg.get('gram2vec_feats_url'), cfg.get('gram2vec_feats_path'))
+
+from utils.visualizations import *
+from utils.llm_feat_utils import *
+from utils.gram2vec_feat_utils import *
+from utils.interp_space_utils import *
+from utils.ui import *
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
