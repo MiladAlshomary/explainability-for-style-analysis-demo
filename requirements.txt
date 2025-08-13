@@ -6,7 +6,7 @@ ipywidgets
 matplotlib
 openai
 python-dotenv
-gradio
+gradio==5.30
 pyyaml
 plotly
 sentence_transformers
