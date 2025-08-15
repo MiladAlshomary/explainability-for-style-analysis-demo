@@ -518,11 +518,13 @@ def compute_clusters_g2v_representation(
     author_ids: List[Any],
     other_author_ids: List[Any],
     features_clm_name: str,
-    top_n: int = 10
+    top_n: int = 10,
+    mode: str = "sharedness",
+    sharedness_method: str = "mean_minus_alpha_std",
+    alpha: float = 0.5
 ) -> List[str]:
 
 
-    # Get boolean mask for documents in selected clusters
     selected_mask = background_corpus_df['authorID'].isin(author_ids).to_numpy()
 
     if not selected_mask.any():
@@ -530,8 +532,33 @@ def compute_clusters_g2v_representation(
 
     selected_feats = background_corpus_df[selected_mask][features_clm_name].tolist()
     all_g2v_feats  = list(selected_feats[0].keys())
-    all_g2v_values = np.array([list(x.values()) for x in selected_feats]).mean(axis=0)
 
+    # If the user requested a sharedness-based score, compute it and return top-N.
+    if mode == "sharedness":
+        selected_matrix = np.array([list(x.values()) for x in selected_feats], dtype=float)
+
+        if sharedness_method == "mean":
+            scores = selected_matrix.mean(axis=0)
+        elif sharedness_method in ("mean_minus_alpha_std", "mean-std", "mean_minus_std"):
+            means = selected_matrix.mean(axis=0)
+            stds  = selected_matrix.std(axis=0)
+            scores = means - float(alpha) * stds
+        elif sharedness_method == "min":
+            scores = selected_matrix.min(axis=0)
+        else:
+            # Default fallback to mean-minus-alpha*std if unknown method
+            means = selected_matrix.mean(axis=0)
+            stds  = selected_matrix.std(axis=0)
+            scores = means - float(alpha) * stds
+
+        # Rank and return
+        feature_scores = [(feat, score) for feat, score in zip(all_g2v_feats, scores) if score > 0]
+        feature_scores.sort(key=lambda x: x[1], reverse=True)
+        return [feat for feat, _ in feature_scores[:top_n]]
+
+
+    # Contrastive mode (default): compute target mean and subtract contrast mean
+    all_g2v_values = np.array([list(x.values()) for x in selected_feats]).mean(axis=0)
 
     other_selected_feats = background_corpus_df[~selected_mask][features_clm_name].tolist()
     all_g2v_other_feats  = list(other_selected_feats[0].keys())
