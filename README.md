@@ -106,7 +106,7 @@ The application behavior can be customized through `config/config.yaml`:
 
 The tool comes with Reddit text samples by default, but provides flexibility for custom use:
 
-- **Custom Data Upload**: Users can upload their own authorship attribution tasks in JSON format
+- **Custom Data Upload**: Users can upload their own authorship attribution tasks in .txt format
 
     **Expected txt files format**:
     - Query author texts (mystery author samples)
