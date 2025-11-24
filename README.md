@@ -1,4 +1,4 @@
-# Authorship Attribution Explainability Tool
+<h1 align="center">Authorship Attribution Explainability Tool</h1>
 <div align="center">
 
 [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/ExplainabiliyForAATeam/explainability-tool-for-aa)
@@ -38,7 +38,7 @@ Users can zoom into regions of the embedding space to:
 4. **Model-Agnostic Design**
 Compatible with any sentence-transformer model, enabling flexibility for AA research and forensic applications.
 
-## Installation
+## ⚙️ Installation
 
 ### Prerequisites
 
@@ -78,7 +78,7 @@ OPENAI_API_KEY=your_api_key_here
 OPENAI_API_BASE=https://api.openai.com/v1  # or your custom endpoint
 ```
 
-## Usage
+## 🚀 Usage
 
 ### Running the Application
 
@@ -117,7 +117,7 @@ The tool comes with Reddit text samples by default, but provides flexibility for
 
 The web interface allows you to either use the pre-loaded Reddit dataset or upload your own data and specify your preferred sentence transformer model for analysis.
 
-## Docker Deployment
+## 🐳 Docker Deployment
 
 A Dockerfile is included for containerized deployment:
 
@@ -129,7 +129,7 @@ docker build -t authorship-explainer .
 docker run -p 7860:7860 authorship-explainer
 ```
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 ├── app.py                        # Main Gradio application
