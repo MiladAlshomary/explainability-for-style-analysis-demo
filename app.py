@@ -1,6 +1,6 @@
 import gradio as gr
 import json
-
+import ast
 
 import os
 os.environ["GRADIO_TEMP_DIR"] = "./datasets/temp"  # Set a custom temp directory for Gradio
@@ -20,13 +20,21 @@ from utils.file_download import download_file_override
 def load_config(path="config/config.yaml"):
     with open(path, "r") as f:
         return yaml.safe_load(f)
-    
+
+# A comment to trigger change in spaces
+# comment 6
 cfg = load_config()
 
 
-download_file_override(cfg.get('interp_space_url'), cfg.get('interp_space_path'))
+download_file_override(cfg.get('background_authors_df_url'), cfg.get('background_authors_df_path'))
 download_file_override(cfg.get('instances_to_explain_url'), cfg.get('instances_to_explain_path'))
 download_file_override(cfg.get('gram2vec_feats_url'), cfg.get('gram2vec_feats_path'))
+download_file_override(cfg.get('gram2vec_cache_url'), cfg.get('gram2vec_cache_path'))
+download_file_override(cfg.get('embeddings_cache_url'), cfg.get('embeddings_cache_path'))
+download_file_override(cfg.get('zoom_cache_url'), cfg.get('zoom_cache_path'))
+download_file_override(cfg.get('region_cache_url'), cfg.get('region_cache_path'))
+download_file_override(cfg.get('tsne_cache_url'), cfg.get('tsne_cache_path'))
+download_file_override(cfg.get('llm_style_features_cache_url'), cfg.get('llm_style_features_cache_path'))
 
 from utils.visualizations import *
 from utils.llm_feat_utils import *
@@ -35,7 +43,7 @@ from utils.interp_space_utils import *
 from utils.ui import *
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(base_url=os.getenv("OPENAI_API_BASE"), api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # ── load once at startup ────────────────────────────────────────
@@ -54,12 +62,13 @@ def validate_ground_truth(gt1, gt2, gt3):
     return index, f"Candidate {index+1} is marked as the ground truth author."
 
 
-def app(share=False, use_cluster_feats=False):
+def app(share=False):
     instances, instance_ids = get_instances(cfg['instances_to_explain_path'])
 
-    interp      = load_interp_space(cfg)
-    clustered_authors_df = interp['clustered_authors_df'][:1000]
-    clustered_authors_df['fullText'] = clustered_authors_df['fullText'].map(lambda l: l[:3]) # Take at most 3 texts per author
+    #interp      = load_interp_space(cfg)
+    #clustered_authors_df = interp['clustered_authors_df']
+    clustered_authors_df = pickle.load(open(cfg['background_authors_df_path'], 'rb'))
+
 
     with gr.Blocks(title="Author Attribution Explainability Tool") as demo:
         # ── Big Centered Title ──────────────────────────────────────────
@@ -81,10 +90,7 @@ def app(share=False, use_cluster_feats=False):
             max-width:900px;
         ">
             <p style="font-size:1.3em; line-height:1.4;">
-            This demo helps you <strong>see inside</strong> a deep AA model’s latent style space.
-            </p>
-            <p style="font-size:0.9em; line-height:1.4;">
-            Currently you are inspecting <a href="https://huggingface.co/rrivera1849/LUAR-MUD">LUAR</a> with pre-defined AA tasks from the <a href="https://www.iarpa.gov/images/research-programs/HIATUS/IARPA_HIATUS_Phase_1_HRS_Data.to_DAC_20240610.pdf">HRS dataset </a> 
+            This demo helps you <strong>see inside</strong> the latent space of any embedding-based AA model.
             </p>
             <div style="
             display:flex;
@@ -137,13 +143,13 @@ def app(share=False, use_cluster_feats=False):
         # ── Model Selection ─────────────────────────────────
         model_radio = gr.Radio(
             choices=[
+                'AnnaWegmann/Style-Embedding',
                 'gabrielloiseau/LUAR-MUD-sentence-transformers',
                 'gabrielloiseau/LUAR-CRUD-sentence-transformers',
                 'miladalsh/light-luar',
-                'AnnaWegmann/Style-Embedding',
                 'Other'
             ],
-            value='gabrielloiseau/LUAR-MUD-sentence-transformers',
+            value='AnnaWegmann/Style-Embedding',
             label='Choose a Model to inspect'
         )
         print(f"Model choices: {model_radio.choices}")
@@ -163,8 +169,8 @@ def app(share=False, use_cluster_feats=False):
 
         # ── Task Source Selection ─────────────────────────────────
         task_mode = gr.Radio(
-            choices=["Predefined HRS Task", "Upload Your Own Task"],
-            value="Predefined HRS Task",
+            choices=["Predefined Reddit Task", "Upload Your Own Task"],
+            value="Predefined Reddit Task",
             label="Select Task Source"
         )
 
@@ -224,7 +230,6 @@ def app(share=False, use_cluster_feats=False):
         load_button = gr.Button("Load Task & Generate Embeddings")
 
         # ── HTML outputs for author texts ───────────────────────────
-        default_outputs = load_instance(0, instances)
         #dont need defaults since they are loaded only on click of the load button
         header  = gr.HTML()
         mystery = gr.HTML()
@@ -281,7 +286,30 @@ def app(share=False, use_cluster_feats=False):
         bg_authors_df = gr.State()  # Holds the background authors DataFrame
         with gr.Row():
             with gr.Column(scale=3):
-                axis_ranges = gr.Textbox(visible=False, elem_id="axis-ranges")
+                # axis_ranges = gr.Textbox(visible=False, elem_id="axis-ranges")
+                axis_ranges = gr.Textbox(
+                    visible=True,  # Keep it visible to DOM
+                    elem_id="axis-ranges",
+                    interactive=True,
+                    show_label=False,
+                    container=False,
+                    value="",
+                    elem_classes=["hidden-textbox"]  # Add custom CSS class
+                )
+
+                # Add this CSS to hide it visually
+                gr.HTML("""
+                <style>
+                .hidden-textbox {
+                    position: absolute !important;
+                    left: -9999px !important;
+                    width: 1px !important;
+                    height: 1px !important;
+                    opacity: 0 !important;
+                    pointer-events: none !important;
+                }
+                </style>
+                """)
                 plot = gr.Plot(
                     label="Visualization",
                     elem_id="feature-plot",
@@ -329,13 +357,15 @@ def app(share=False, use_cluster_feats=False):
                                     yaxis: [ev['yaxis.range[0]'], ev['yaxis.range[1]']]
                                 };
 
-                                const txtbox = document.querySelector('#axis-ranges textarea');
-                                if (txtbox) {
-                                    txtbox.value = JSON.stringify(payload);
-                                    txtbox.dispatchEvent(new Event('input', { bubbles: true }));
-                                    console.log("------------> Zoom payload dispatched:<------------", payload);
-                                } else {
-                                    console.warn("------------> No hidden textbox found to write zoom payload.<------------");
+                                if (window.confirm("Do you want to analyze the writing style of the authors in this region?")) {
+                                    const txtbox = document.querySelector('#axis-ranges textarea');
+                                    if (txtbox) {
+                                        txtbox.value = JSON.stringify(payload);
+                                        txtbox.dispatchEvent(new Event('input', { bubbles: true }));
+                                        console.log("------------> Zoom payload dispatched:<------------", payload);
+                                    } else {
+                                        console.warn("------------> No hidden textbox found to write zoom payload.<------------");
+                                    }
                                 }
                             });
                         };
@@ -362,18 +392,49 @@ def app(share=False, use_cluster_feats=False):
                 """
                 gr.HTML(styled_html(expl_html))
         
-        cluster_dropdown = gr.Dropdown(choices=[], label="Select Cluster to Inspect", visible=False)
         style_map_state = gr.State()
         llm_style_feats_analysis = gr.State()
         visible_zoomed_authors = gr.State()
 
-        if use_cluster_feats:
-            # ── Dynamic Cluster Choice dropdown ──────────────────────────────────
-            gr.HTML(instruction_callout("Choose a cluster from the dropdown below to inspect whether its features appear in the mystery author’s text."))
-            cluster_dropdown.visible = True
-        else:
-            gr.HTML(instruction_callout("Zoom in on the plot to select a set of background authors and see the presence of the top features from this set in candidate and mystery authors."))
-           
+        gr.HTML(instruction_callout("Zoom in on the plot to select a set of background authors and see the presence of the top features from this set in candidate and mystery authors."))
+        
+        # Add this after the plot generation
+        gr.HTML("""
+            <div style="
+                font-size: 1.2em;
+                font-weight: 600;
+                margin: 1em 0 0.5em 0;
+            ">
+                Quick Region Selection
+            </div>
+            <div style="
+                font-size: 0.9em;
+                color: #666;
+                margin-bottom: 1em;
+            ">
+                Select a precomputed region to analyze, or zoom manually on the plot above
+            </div>
+        """)
+
+        # State to store precomputed regions
+        precomputed_regions_state = gr.Textbox(
+            visible=True,  # Keep it visible to DOM
+            elem_id="precomputed-regions",
+            interactive=True,
+            show_label=False,
+            container=False,
+            value="",
+            elem_classes=["hidden-textbox"]  # Add custom CSS class
+        )
+        
+        precomputed_regions_radio = gr.Radio(
+            choices=["None"],
+            value="None", 
+            label="Precomputed Regions",
+            info="Select a region to automatically zoom and analyze"
+        )
+        
+        
         with gr.Row():
             # ── LLM Features Column ──────────────────────────────────
             with gr.Column(scale=1, min_width=0):
@@ -412,25 +473,91 @@ def app(share=False, use_cluster_feats=False):
                 custom_model_input, task_authors_embeddings_df, background_authors_embeddings_df, predicted_author, ground_truth_author
             ),
             inputs=[task_dropdown, model_radio, custom_model, task_authors_embeddings_df, background_authors_embeddings_df, predicted_author, ground_truth_author],
-            outputs=[plot, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df]
+            outputs=[plot, style_map_state, bg_proj_state, bg_lbls_state, bg_authors_df, precomputed_regions_state, precomputed_regions_radio]
         )
-        
-        # Populate feature list based on selection. 
-        if use_cluster_feats:
-            # Use cluster-based flow
-            cluster_dropdown.change(
-                fn=on_cluster_change,
-                inputs=[cluster_dropdown, style_map_state],
-                outputs=[features_rb, gram2vec_rb , feature_list_state] 
-                #adding feature_list_state to persisit all llm features in the app state
-            )
-        else:
 
-            axis_ranges.change(
-                fn=handle_zoom_with_retries, 
-                inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df, task_authors_embeddings_df], 
-                outputs=[features_rb, gram2vec_rb , llm_style_feats_analysis, feature_list_state, visible_zoomed_authors]
-            )
+        precomputed_regions_radio.change(
+            fn=lambda region_name, precomputed_regions_json: trigger_precomputed_region(region_name, ast.literal_eval(precomputed_regions_json)),
+            inputs=[precomputed_regions_radio, precomputed_regions_state],
+            outputs=[axis_ranges],
+            js="""
+            function(region_name, regions_json_str) {
+                console.log('=== ZOOM DEBUG START ===');
+                console.log('Region selected:', region_name);
+                console.log('Regions JSON string received:', typeof regions_json_str);
+                
+                // Check if Plotly is available
+                console.log('Plotly available:', typeof window.Plotly);
+                
+                // Find plot element
+                const plotDiv = document.querySelector('#feature-plot .js-plotly-plot');
+                console.log('Plot element found:', !!plotDiv);
+                
+                if (plotDiv) {
+                    console.log('Plot element exists');
+                }
+                
+                if (region_name === "None") {
+                    // Reset to original zoom when None is selected
+                    console.log('Resetting zoom to original view...');
+                    if (window.Plotly && plotDiv) {
+                        window.Plotly.relayout(plotDiv, {
+                            'xaxis.autorange': true,
+                            'yaxis.autorange': true
+                        }).then(() => {
+                            console.log('✓ Reset to auto-range completed successfully');
+                        }).catch(err => {
+                            console.log('✗ Reset failed:', err);
+                        });
+                    }
+                }
+                else{// Try to parse regions
+                    try {
+                        const precomputed_regions = JSON.parse(regions_json_str);
+                        console.log('Regions parsed successfully');
+                        console.log('Available regions:', Object.keys(precomputed_regions));
+                        
+                        if (region_name !== "None" && precomputed_regions[region_name]) {
+                            const region = precomputed_regions[region_name];
+                            const bbox = region.bbox;
+                            console.log('Bbox to apply:', bbox);
+                            
+                            if (window.Plotly && plotDiv) {
+                                console.log('Calling Plotly.relayout...');
+                                
+                                const update = {
+                                    'xaxis.range': [bbox.xaxis[0], bbox.xaxis[1]],
+                                    'yaxis.range': [bbox.yaxis[0], bbox.yaxis[1]],
+                                    'xaxis.autorange': false,
+                                    'yaxis.autorange': false
+                                };
+                                console.log('Update object:', update);
+                                
+                                window.Plotly.relayout(plotDiv, update)
+                                    .then(() => console.log('✓ Relayout completed successfully'))
+                                    .catch(err => console.log('✗ Relayout failed:', err));
+                            } else {
+                                console.log('Missing requirements - Plotly:', !!window.Plotly, 'PlotDiv:', !!plotDiv);
+                            }
+                        } else {
+                            console.log('Region not found or None selected');
+                        }
+                    } catch(e) {
+                        console.log('Error in region processing:', e);
+                    }
+                }
+                    
+                console.log('=== ZOOM DEBUG END ===');
+                return [region_name, regions_json_str];
+            }
+            """
+        )
+
+        axis_ranges.change(
+            fn=handle_zoom_with_retries, 
+            inputs=[axis_ranges, bg_proj_state, bg_lbls_state, bg_authors_df, task_authors_embeddings_df, predicted_author], 
+            outputs=[features_rb, gram2vec_rb , llm_style_feats_analysis, feature_list_state, visible_zoomed_authors]
+        )
 
 
         # ── Show combined feature‐span highlights ──
@@ -475,7 +602,7 @@ def app(share=False, use_cluster_feats=False):
 
         combined_btn  = gr.Button("Show Combined Spans")
         combined_html = gr.HTML()
-        show_background_checkbox = gr.Checkbox(label="Show spans in background authors", value=False)
+        show_background_checkbox = gr.Checkbox(label="Show spans in background authors", value=False, visible=False)
         background_html = gr.HTML(visible=False)
         # print(f"in app: all_feats={feature_list_state.value}")
         # print(f"in app: sel_feat_llm={features_rb.value}")
@@ -510,7 +637,4 @@ def app(share=False, use_cluster_feats=False):
     demo.launch(share=share)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--use_cluster_feats", action="store_true", help="Use cluster-based selection for features")
-    args = parser.parse_args()
-    app(share=True, use_cluster_feats=args.use_cluster_feats)
+    app(share=True)

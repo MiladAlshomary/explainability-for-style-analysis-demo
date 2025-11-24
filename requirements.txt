@@ -3,7 +3,7 @@ spacy
 scikit-learn
 openai
 python-dotenv
-gradio==5.30
+gradio==5.30.0
 pyyaml
 plotly
 sentence_transformers

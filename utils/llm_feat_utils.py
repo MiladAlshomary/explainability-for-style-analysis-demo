@@ -3,6 +3,7 @@ import os
 import hashlib
 import time
 from json import JSONDecodeError
+import traceback
 
 CACHE_DIR = "datasets/feature_spans_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -21,7 +22,7 @@ def _feat_hash(feature: str, text: str) -> str:
     blob = json.dumps({
         "version": CACHE_VERSION,
         "text": text,
-        "features": sorted(feature)
+        "features": feature
     }, sort_keys=True).encode()
     return hashlib.md5(blob).hexdigest()
 
@@ -31,19 +32,20 @@ def generate_feature_spans(client, text: str, features: list[str]) -> str:
     """
     Call to OpenAI to extract spans. Returns a JSON string.
     """
+    # For some of the longer features, openai client was truncating the feature names, resulting in downstream errors.
+    # Adding structured JSON template to ensure all features are included properly.
+    features_json_template = {feature: [] for feature in features}
     prompt = f"""You are a linguistic specialist. Given a writing sample and a list of descriptive features, identify the exact text spans that demonstrate each feature.
     
     Important:
     - The headers like "Document 1:" etc are NOT part of the original text — ignore them.
     - For each feature, even if there is no match, return an empty list.
     - Only return exact phrases from the text.
+    - Use the EXACT feature names as JSON keys - do not paraphrase or shorten them.
 
-    Respond in JSON format like:
-    {{
-      "feature1": ["span1", "span2"],
-      "feature2": [],
-      …
-    }}
+
+    Respond in this EXACT JSON format (use these exact keys, populate the lists with the extracted text spans):
+    {json.dumps(features_json_template, indent=2)}
 
     Text:
     \"\"\"{text}\"\"\"
@@ -51,12 +53,16 @@ def generate_feature_spans(client, text: str, features: list[str]) -> str:
     Style Features:
     {features}
     """
+    # print('==================>>>>>>>>>>')
+    # print(prompt)
+    # print('==================>>>>>>>>>>')
     response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role":"user","content":prompt}],
-        temperature=0.3,
+        model="gpt-4o",
+        messages=[{"role":"user","content":prompt}]
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    content = content.replace('```json', '').replace('```','')
+    return content
 
 def generate_feature_spans_with_retries(client, text: str, features: list[str]) -> dict:
     """
@@ -66,10 +72,18 @@ def generate_feature_spans_with_retries(client, text: str, features: list[str]) 
     for attempt in range(MAX_ATTEMPTS):
         try:
             response_str = generate_feature_spans(client, text, features)
+            # print(response_str)
             result = json.loads(response_str)
+            # Additional check to ensure all requested features are present in the response correctly
+            if result.keys() != set(features):
+                print("Response keys do not match requested features. Retrying!")
+                response_str = generate_feature_spans(client, text, features)
+                # print(response_str)
+                result = json.loads(response_str)
             return result
         except (JSONDecodeError, ValueError) as e:
             print(f"Attempt {attempt+1} failed: {e}")
+            traceback.print_exc()
             if attempt < MAX_ATTEMPTS - 1:
                 wait_sec = WAIT_SECONDS * (2 ** attempt)
                 print(f"Retrying after {wait_sec} seconds...")
@@ -90,12 +104,15 @@ def generate_feature_spans_cached(client, text: str, features: list[str], role: 
     os.makedirs(CACHE_DIR, exist_ok=True)
     cache_path = os.path.join(CACHE_DIR, f"{role}.json")
     if os.path.exists(cache_path):
+        print(f"Cache hit....")
         with open(cache_path) as f:
             cache: dict[str, dict] = json.load(f)
     else:
         cache = {}
     result: dict[str, list[str]] = {}
     missing_feats: list[str] = []
+    missing_feats_count = 0
+    found_feats_count = 0
 
     for feat in features:
         if feat == "None":
@@ -104,10 +121,21 @@ def generate_feature_spans_cached(client, text: str, features: list[str], role: 
         
         h = _feat_hash(feat, text)
         if h in cache:
-            result[feat] = cache[h]["spans"]
+            # print(f"Found feature: {feat}")
+            found_feats_count += 1
+            if cache[h]["spans"] is None:
+                print(f"Missing feature: {feat}")
+                missing_feats_count += 1
+                missing_feats.append(feat)
+            else:
+                result[feat] = cache[h]["spans"]
+
         else:
+            # print(f"Missing feature: {feat}")
+            missing_feats_count += 1
             missing_feats.append(feat)
 
+    print(f"Found {found_feats_count} features in cache, {missing_feats_count} missing")
     if missing_feats:
 
         mapping = generate_feature_spans_with_retries(client, text, missing_feats)
