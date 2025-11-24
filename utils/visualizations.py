@@ -10,10 +10,10 @@ import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 from gradio import update
 import re
-from utils.interp_space_utils import compute_clusters_style_representation_3, compute_clusters_g2v_representation
+from utils.interp_space_utils import compute_clusters_style_representation_3, compute_clusters_g2v_representation, compute_precomputed_regions
 from utils.llm_feat_utils import split_features
 from utils.gram2vec_feat_utils import get_shorthand, get_fullform
-
+from gram2vec.feature_locator import find_feature_spans
 import plotly.io as pio
 
 def clean_text(text: str) -> str:
@@ -132,7 +132,9 @@ def compute_tsne_with_cache(embeddings: np.ndarray, cache_path: str = 'datasets/
     else:
         print("Computing t-SNE")
         tsne_result = TSNE(n_components=2, learning_rate='auto',
-                           init='random', perplexity=3).fit_transform(embeddings)
+                          init='random', perplexity=10, random_state=42, metric='cosine').fit_transform(embeddings)
+        #tsne_result = umap.UMAP(n_components=2, n_neighbors=30, min_dist=0.3, metric='cosine').fit_transform(embeddings)
+        
         cache[hash_key] = tsne_result
         with open(cache_path, 'wb') as f:
             pkl.dump(cache, f)
@@ -144,9 +146,15 @@ def load_interp_space(cfg):
     gram2vec_feats_path    = cfg['interp_space_path'] + '/../gram2vec_feats.csv'
     clustered_authors_path = cfg['interp_space_path'] + 'train_authors.pkl'
 
+    max_num_docs_per_authors = cfg['max_num_docs_per_authors']
+    max_num_bg_authors = cfg['max_num_bg_authors']
+
     # Load authors embeddings and their cluster labels
-    clustered_authors_df = pd.read_pickle(clustered_authors_path)
-    clustered_authors_df = clustered_authors_df[clustered_authors_df.cluster_label != -1]
+    clustered_authors_df = pd.read_pickle(clustered_authors_path).iloc[:max_num_bg_authors]
+    clustered_authors_df['fullText'] = clustered_authors_df.fullText.map(lambda list: '\n\n'.join(['Document {}: {}'.format(i+1, text) for i, text in enumerate(list[:max_num_docs_per_authors])]))
+
+    print('Average atuhor text length:', clustered_authors_df.fullText.map(lambda x: len(x.split())).mean())
+
     author_embedding = clustered_authors_df.author_embedding.tolist()
     author_labels    = clustered_authors_df.cluster_label.tolist()
     author_ids      = clustered_authors_df.authorID.tolist()
@@ -193,15 +201,52 @@ def load_interp_space(cfg):
 
     }
 
+# Function to process G2V features and create display choices
+def format_g2v_features_for_display(g2v_features_with_scores):
+    """
+    Convert G2V features into display format for Gradio radio buttons.
+    
+    Args:
+        g2v_features_with_scores: List of tuples like:
+            [('None', None), ('Feature Name', score), ...]
+    
+    Returns:
+        tuple: (display_choices, original_values)
+    """
+    display_choices = []
+    original_values = []
+    
+    for item in g2v_features_with_scores:
+        if len(item) == 2:
+            feature_name, score = item
+            
+            # Handle None case
+            if feature_name == "None" or score is None:
+                display_choices.append("None")
+                original_values.append("None")
+            else:
+                # Just show the feature name without scores
+                display_choices.append(feature_name)
+                original_values.append(feature_name)
+        else:
+            # Handle unexpected format
+            display_choices.append(str(item))
+            original_values.append(str(item))
+    
+    return display_choices, original_values
+
 #function to handle zoom events
-def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df):
+def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df, predicted_author=None):
     """
     event_json         – stringified JSON from JS listener
     bg_proj            – (N,2) numpy array with 2D coordinates
     bg_lbls            – list of N author IDs
     clustered_authors_df – pd.DataFrame containing authorID and final_attribute_name
+    task_authors_df    – pd.DataFrame containing task authors
+    predicted_author   – index of predicted author (0, 1, or 2)
     """
     print("[INFO] Handling zoom event")
+    print(f"[INFO] Predicted author: {predicted_author}")
 
     if not event_json:
         return gr.update(value=""), gr.update(value=""), None, None, None
@@ -223,51 +268,85 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
 
     print(f"[INFO] Zoomed region includes {len(visible_authors)} authors:{visible_authors}")
 
-    # Example: Find features for clusters [2,3,4] that are NOT prominent in cluster [1]
-    # llm_feats = compute_clusters_style_representation(
-    #     background_corpus_df=clustered_authors_df,
-    #     cluster_ids=visible_authors,
-    #     cluster_label_clm_name='authorID',
-    #     other_cluster_ids=[],
-    #     features_clm_name='final_attribute_name_manually_processed'
-    # )
     print(f"Task authors: {len(task_authors_df)}, Clustered authors: {len(clustered_authors_df)}")
     merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
     print(f"Merged authors DataFrame:\n{len(merged_authors_df)}")
+    #style_analysis_response = {'features': [], 'spans': []}
     style_analysis_response = compute_clusters_style_representation_3(
         background_corpus_df=merged_authors_df,
         cluster_ids=visible_authors,
         cluster_label_clm_name='authorID',
+        predicted_author=predicted_author
     )
 
     llm_feats = ['None'] + style_analysis_response['features']
 
 
     merged_authors_df = pd.concat([task_authors_df, clustered_authors_df])
+    #g2v_feats = []
     g2v_feats = compute_clusters_g2v_representation(
         background_corpus_df=merged_authors_df,
         author_ids=visible_authors,
         other_author_ids=[],
-        features_clm_name='g2v_vector'
+        features_clm_name='g2v_vector',
+        top_n=15,
+        predicted_author=predicted_author
     )
 
-    # Gram2vec features are already in shorthand. convert to human readable for display
-    HR_g2v_list = []
-    for feat in g2v_feats:
-        HR_g2v = get_fullform(feat)
-        print(f"\n\n feat: {feat} ---> Human Readable: {HR_g2v}")
-        if HR_g2v is None:
-            print(f"Skipping Gram2Vec feature without human readable form: {feat}")
-        else:
-            HR_g2v_list.append(HR_g2v)
+    # ── Span-existence filter on task authors in the zoom ───────────────────
+    # Keep only features that have detected spans in at least 2 of the
+    # task authors' texts (Mystery + Candidates 1-3)
+    # Use only the task authors (Mystery + Candidates 1-3), not the zoom-visible set
+    # task_author_ids = {"Mystery author", "Candidate Author 1", "Candidate Author 2", "Candidate Author 3"}
+    # task_only_df = task_authors_df[task_authors_df['authorID'].isin(task_author_ids)]
+    # if task_only_df.empty:
+    #     task_only_df = task_authors_df
 
-    HR_g2v_list = ["None"] + HR_g2v_list
+    # def _to_text(x):
+    #     return '\n\n'.join(x) if isinstance(x, list) else x
+
+    # task_texts = [_to_text(x) for x in task_only_df['fullText'].tolist()]
+
+    # print(f"len task_texts: {len(task_texts)}")
+    # filtered_g2v_feats = []
+    # for feat in g2v_feats:
+    #     try:
+    #         # `feat` is shorthand already (e.g., 'pos_bigrams:NOUN PROPN')
+    #         occurrences = 0
+    #         for txt in task_texts:
+    #             spans = find_feature_spans(txt, feat[0])
+    #             if spans:
+    #                 occurrences += 1
+    #         if occurrences >= 2:
+    #             filtered_g2v_feats.append(feat)
+    #         else:
+    #             print(f"[INFO] Dropping G2V feature with <2 task-author spans: {feat}")
+    #     except Exception as e:
+    #         print(f"[WARN] Error while checking spans for {feat}: {e}")
+
+    # # After filtering by spans, keep top-N by score
+    # filtered_g2v_feats = filtered_g2v_feats[:10]
+    filtered_g2v_feats = g2v_feats
+
+    # Convert to human readable for display
+    HR_g2v_list = []
+    for feat in filtered_g2v_feats:
+        HR_g2v = get_fullform(feat[0])
+        # print(f"\n\n feat: {feat} ---> Human Readable: {HR_g2v}")
+        if HR_g2v is None:
+            #print(f"Skipping Gram2Vec feature without human readable form: {feat}")
+            HR_g2v_list.append((feat[0], feat[1])) #get the score
+        else:
+            HR_g2v_list.append((HR_g2v, feat[1])) #get the score
+
+    HR_g2v_list = [("None", None)] + HR_g2v_list
 
     print(f"[INFO] Found {len(llm_feats)} LLM features and {len(g2v_feats)} Gram2Vec features in the zoomed region.")   
-    print(f"[INFO] unfiltered g2v features: {g2v_feats}")
+    # print(f"[INFO] unfiltered g2v features: {g2v_feats}")
 
     print(f"[INFO] LLM features: {llm_feats}")
-    print(f"[INFO] Gram2Vec features: {HR_g2v_list}")
+    HR_g2v_list, _ = format_g2v_features_for_display(HR_g2v_list)
+    # print(f"[INFO] Gram2Vec features: {HR_g2v_list}")
 
     return (
         gr.update(choices=llm_feats, value=llm_feats[0]),
@@ -278,19 +357,20 @@ def handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors
     )
     # return gr.update(value="\n".join(llm_feats).join("\n").join(g2v_feats)), llm_feats, g2v_feats
 
-def handle_zoom_with_retries(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df):
+def handle_zoom_with_retries(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df, predicted_author=None):
     """
     event_json         – stringified JSON from JS listener
     bg_proj            – (N,2) numpy array with 2D coordinates
     bg_lbls            – list of N author IDs
     clustered_authors_df – pd.DataFrame containing authorID and final_attribute_name
     task_authors_df   – pd.DataFrame containing authorID and final_attribute_name
+    predicted_author  – index of predicted author (0, 1, or 2)
     """
     print("[INFO] Handling zoom event with retries")
 
     for attempt in range(3):
         try:
-            return handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df)
+            return handle_zoom(event_json, bg_proj, bg_lbls, clustered_authors_df, task_authors_df, predicted_author)
         except Exception as e:
             print(f"[ERROR] Attempt {attempt + 1} failed: {e}")
             if attempt < 2:
@@ -307,12 +387,12 @@ def handle_zoom_with_retries(event_json, bg_proj, bg_lbls, clustered_authors_df,
 def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_input, task_authors_df, background_authors_embeddings_df, pred_idx=None, gt_idx=None):
     model_name = model_radio if model_radio != "Other" else custom_model_input
     embedding_col_name = f'{model_name.split("/")[-1]}_style_embedding'
-    print(background_authors_embeddings_df.columns)
+    # print(background_authors_embeddings_df.columns)
     print("Generating cluster visualization")
     iid = int(iid)
-    interp      = load_interp_space(cfg)
+    #interp      = load_interp_space(cfg)
     # dim2lat     = interp['dimension_to_latent']
-    style_names = interp['dimension_to_style']
+    #style_names = interp['dimension_to_style']
     # bg_emb      = np.array(interp['author_embedding'])
     # print(f"bg_emb shape: {bg_emb.shape}")
     #replace with cached embedddings
@@ -345,33 +425,8 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
     # split
     q_proj    = proj[0]
     c_proj    = proj[1:4]
-    #bg_proj   = proj[4:4+len(bg_lbls)]
     bg_proj   = proj
 
-    # cent_proj = proj[4+len(bg_lbls):]
-
-
-    # find nearest centroid
-    # dists = np.linalg.norm(cent_proj - q_proj, axis=1)
-    # idx   = int(np.argmin(dists))
-    # cluster_label_query = cent_lbl[idx]
-    # features of the nearest centroid to display
-    # feature_list = style_names[cluster_label_query]
-
-    # cluster_labels_per_candidate = [
-    #     cent_lbl[int(np.argmin(np.linalg.norm(cent_proj - c_proj[i], axis=1)))]
-    #     for i in range(c_proj.shape[0])
-    # ]
-
-    # prepare colorscale
-    # n_cent = len(cent_lbl)
-    # cent_colors = sample_colorscale("algae", [i/(n_cent-1) for i in range(n_cent)])
-    # map each cluster label to its color
-    # color_map = { label: cent_colors[i] for i, label in enumerate(cent_lbl) }
-
-    # uncomment the following line to show background authors
-    ## background author colors pulled from their cluster label
-    # bg_colors = [ color_map[label] for label in bg_lbls ]
 
     # 2) build Plotly figure
     fig = go.Figure()
@@ -384,13 +439,6 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
         # Enable zoom events
         dragmode='zoom'  
     )
-    
-    # fig.update_layout(
-    #     template='plotly_white',
-    #     margin=dict(l=40,r=40,t=60,b=40),
-    #     autosize=True,
-    #     hovermode='closest')
-
 
     # uncomment the following line to show background authors
     ## background authors (light grey dots)
@@ -401,20 +449,6 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
         name='Background authors',
         hoverinfo='skip'
     ))
-
-    # centroids (rainbow colors + hovertext of your top-k features)
-    # hover_texts = [
-    #     f"Cluster {lbl}<br>" + "<br>".join(style_names[lbl])
-    #     for lbl in cent_lbl
-    # ]
-    # fig.add_trace(go.Scattergl(
-    #     x=cent_proj[:,0], y=cent_proj[:,1],
-    #     mode='markers',
-    #     marker=dict(symbol='triangle-up', size=10, color="#d3d3d3"),#color=cent_colors
-    #     name='Cluster centroids',
-    #     hovertext=hover_texts,
-    #     hoverinfo='text'
-    # ))
 
     # three candidates
     marker_syms = ['diamond','pentagon','x']
@@ -490,75 +524,62 @@ def visualize_clusters_plotly(iid, cfg, instances, model_radio, custom_model_inp
             font=dict(color='darkblue', size=12)
         )
 
+    # Compute precomputed regions
+    bg_proj_for_regions = proj[4:]  # Background projections
+    bg_ids_for_regions = bg_ids[4:]  # Background IDs
+    
+    # Compute precomputed regions
+    mystery_id = task_authors_df['authorID'].iloc[0]  # Mystery author ID
+    candidate_ids = task_authors_df['authorID'].iloc[1:4].tolist()  # 3 candidate IDs
+
+    precomputed_regions = compute_precomputed_regions(
+        bg_proj_for_regions, bg_ids_for_regions, q_proj, c_proj, pred_idx, model_name
+    )
+    
+    # Create choices for radio buttons
+    pc=json.loads(precomputed_regions)
+    region_choices = ["None"] + list(pc.keys())
+
     print('Done processing....')
-    # Prepare outputs for the new cluster‐dropdown UI
-    # all_clusters = sorted(style_names.keys())
-    # --- build display names for the dropdown ---
-    # sorted_labels = sorted([int(lbl) for lbl in cent_lbl])
-    # display_clusters = []
-    # for lbl in sorted_labels:
-    #     name = f"Cluster {lbl}"
-    #     if lbl == cluster_label_query:
-    #         name += " (closest to mystery author)"
-    #     matching_indices = [i + 1 for i, val in enumerate(cluster_labels_per_candidate) if int(val) == lbl]
-    #     if matching_indices:
-    #         if len(matching_indices) == 1:
-    #             name += f" (closest to Candidate {matching_indices[0]} author)"
-    #         else:
-    #             candidate_str = ", ".join(f"Candidate {i}" for i in matching_indices)
-    #             name += f" (closest to {candidate_str} authors)"
-    #     display_clusters.append(name)
-    # print(f"All clusters: {all_clusters}")
-    # return: figure, dropdown payload, full style_map
+    
     return (
       fig,
     #   update(choices=display_clusters, value=display_clusters[cluster_label_query]),
-      style_names, 
+      None, 
       bg_proj,  # Return background points
       bg_ids,    # Return background labels
       background_authors_embeddings_df,  # Return the DataFrame for zoom handling
+      precomputed_regions,  # Return region choices
+      gr.update(choices=region_choices, value="None")
 
     )
     # return fig, update(choices=feature_list, value=feature_list[0]),feature_list
 
-
-def extract_cluster_key(display_label: str) -> int:
+def trigger_precomputed_region(region_name, precomputed_regions):
     """
-    Given a dropdown label like
-      "Cluster 5 (closest to mystery author; closest to Candidate 1 author)"
-    returns the integer 5.
+    Simulate a zoom event for a precomputed region.
+    Returns the JSON payload that would be sent to axis_ranges.
     """
-    m = re.match(r"Cluster\s+(\d+)", display_label)
-    if not m:
-        raise ValueError(f"Unrecognized cluster label: {display_label}")
-    return int(m.group(1))
+    print(f"[INFO] Triggering precomputed region: {region_name}")
+    print(f"precomputed_regions type: {type(precomputed_regions)}")
+    # print(f"precomputed_regions content: {precomputed_regions}")
+    try:
+        # Parse the JSON string back to dictionary
+        # precomputed_regions = json.loads(precomputed_regions) if precomputed_regions else {}
+        print(f"Available regions: {len(list(precomputed_regions.keys()))}")
+        # print(f"Available regions: {list(precomputed_regions.keys())}")
+        if region_name == "None" or region_name not in precomputed_regions:
+            return ""
+        
+        region = precomputed_regions[region_name]
+        payload = region['bbox']
+        json_payload = {
+            'xaxis': [float(payload['xaxis'][0]), float(payload['xaxis'][1])],
+            'yaxis': [float(payload['yaxis'][0]), float(payload['yaxis'][1])]
+        }
 
-
-
-# When a cluster is selected, split features and populate radio buttons
-def on_cluster_change(selected_cluster, style_map):
-    cluster_key = extract_cluster_key(selected_cluster)
-    all_feats = style_map[cluster_key]
-    llm_feats, g2v_feats = split_features(all_feats)
-    # print(f"Selected cluster: {selected_cluster} ({cluster_key})")
-    # print(f"LLM features: {llm_feats}")
-
-    # Add "None" as a default selectable option
-    llm_feats = ["None"] + llm_feats
-
-    # filter out any g2v feature without a shorthand
-    filtered_g2v = []
-    for feat in g2v_feats:
-        if get_shorthand(feat) is None:
-            print(f"Skipping Gram2Vec feature without shorthand: {feat}")
-        else:
-            filtered_g2v.append(feat)
-    
-    # Add "None" as a default selectable option
-    filtered_g2v = ["None"] + filtered_g2v
-
-    return (
-        gr.update(choices=llm_feats, value=llm_feats[0]),
-        gr.update(choices=filtered_g2v, value=filtered_g2v[0]),
-        llm_feats
-    )
+        # js_code = trigger_plot_zoom_js(region_name, precomputed_regions)
+        return json.dumps(json_payload)#, js_code
+    except Exception as e:
+        print(f"[ERROR] Failed to trigger precomputed region: {e}")
+        return ""

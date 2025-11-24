@@ -1,12 +1,36 @@
 # config.yaml
-instances_to_explain_path: "./datasets/hrs_explanations.json"
-instances_to_explain_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/raw/main/hrs_explanations.json?download"
-interp_space_path:    "./datasets/luar_interp_space_cluster_19/"
-interp_space_url:    "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/luar_interp_space_cluster.zip?download=true"
+
+instances_to_explain_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/reddit_explanation_sample.json?download=true"
+instances_to_explain_path: "./datasets/reddit_explanation_sample.json"
+
+background_authors_df_path:    "./datasets/reddit_clustered_authors.pkl"
+background_authors_df_url:    "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/reddit_clustered_authors.pkl?download=true"
+
 gram2vec_feats_path:      "./datasets/gram2vec_feats.csv"
 gram2vec_feats_url:      "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/gram2vec_feats.csv?download=true"
+
+gram2vec_cache_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/gram2vec_cache.zip?download=true"
+gram2vec_cache_path: "./datasets/gram2vec_cache/"
+
+embeddings_cache_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/embeddings_cache.zip?download=true"
+embeddings_cache_path: "./datasets/embeddings_cache/"
+
+zoom_cache_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/zoom_cache.zip?download=true"
+zoom_cache_path: "./datasets/zoom_cache/"
+
+region_cache_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/region_cache.zip?download=true"
+region_cache_path: "./datasets/region_cache/"
+
+tsne_cache_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/tsne_cache.pkl?download=true"
+tsne_cache_path: "./datasets/tsne_cache.pkl"
+
+llm_style_features_cache_url: "https://huggingface.co/datasets/miladalsh/explanation_tool_files/resolve/main/feature_spans_cache.zip?download=true"
+llm_style_features_cache_path: "./datasets/feature_spans_cache/"
+
 
 style_feat_clm:       "llm_tfidf_weights"
 top_k:                10
 only_llm_feats:       false
 only_gram2vec_feats:  false
+max_num_docs_per_authors: 3
+max_num_bg_authors: 500

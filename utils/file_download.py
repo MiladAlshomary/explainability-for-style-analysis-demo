@@ -46,14 +46,30 @@ def download_file_override(url: str, dest_path: str):
                 with zipfile.ZipFile(tmp_path, 'r') as z:
                     z.extractall(tmp_extract_dir)
 
-                # Move *contents* of extracted folder into dest_path
-                for item in os.listdir(tmp_extract_dir):
-                    src = os.path.join(tmp_extract_dir, item)
-                    dst = os.path.join(dest_path, item)
-                    if os.path.isdir(src):
-                        shutil.move(src, dst)
+                if "cache" not in dest_path:
+                    # Move *contents* of extracted folder into dest_path
+                    # cache folders have a different structure, so we skip this step for them
+                    for item in os.listdir(tmp_extract_dir):
+                        src = os.path.join(tmp_extract_dir, item)
+                        dst = os.path.join(dest_path, item)
+                        if os.path.isdir(src):
+                            shutil.move(src, dst)
+                        else:
+                            shutil.move(src, dst)
+                else:
+                    # processing for cache folders of structure like zoom_cache.zip -> zoom_cache/zoom_cache/*
+                    # also hold some auto generated macos metadata.
+                    # Move the entire extracted folder into dest_path
+                    contents = [x for x in os.listdir(tmp_extract_dir) if not x.startswith('__MACOSX')]
+                    if len(contents) == 1 and os.path.isdir(os.path.join(tmp_extract_dir, contents[0])):
+                        # Flatten: Only one top-level dir, move its contents
+                        only_dir = os.path.join(tmp_extract_dir, contents[0])
+                        for item in os.listdir(only_dir):
+                            shutil.move(os.path.join(only_dir, item), os.path.join(dest_path, item))
                     else:
-                        shutil.move(src, dst)
+                        # Usual: move everything as-is
+                        for item in contents:
+                            shutil.move(os.path.join(tmp_extract_dir, item), os.path.join(dest_path, item))
 
             print(f"Extracted zip contents into '{dest_path}'.")
         else:

@@ -49,7 +49,17 @@ def get_shorthand(feature_str: str) -> str:
         return None
     if category not in FEATURE_HANDLERS:
         return None
-    code = load_code_map().get(human)
+    code_map = load_code_map()
+    code = code_map.get(human)
+    if code is None:
+        # Try normalizing terminology shown in UI
+        # Convert 'Preposition' phrasing back to 'Adposition' used in the code map
+        human_alt = (human
+                     .replace("Preposition", "Adposition")
+                     .replace("preposition", "adposition")
+                     .replace("Prepositional", "Adpositional")
+                     .replace("prepositional", "adpositional"))
+        code = code_map.get(human_alt)
     if code is None:
         # print(f"Warning: No code found for human-readable feature '{human}'")
         return None  # fallback to the human-readable name
@@ -77,6 +87,14 @@ def get_fullform(shorthand: str) -> str:
     human = reverse_code_map.get(code)
     if human is None:
         return None
+
+    # Normalize terminology for UI: prefer "Preposition" over "Adposition"
+    # Also handle potential "adpositional" variants if present
+    human = (human
+             .replace("Adposition", "Preposition")
+             .replace("adposition", "preposition")
+             .replace("Adpositional", "Prepositional")
+             .replace("adpositional", "prepositional"))
 
     return f"{category}:{human}"
 
@@ -126,7 +144,7 @@ def highlight_both_spans(text, llm_spans, gram_spans):
 
 
 def show_combined_spans_all(selected_feature_llm, selected_feature_g2v, 
-                            llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_authors, predicted_author=None, ground_truth_author=None, max_num_authors=7):
+                            llm_style_feats_analysis, background_authors_embeddings_df, task_authors_embeddings_df, visible_authors, predicted_author=None, ground_truth_author=None, max_num_authors=4):
     """
     For mystery + 3 candidates:
      1. get llm spans via your existing cache+API
@@ -144,7 +162,7 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
     background_authors_embeddings_df = background_authors_embeddings_df[background_authors_embeddings_df.authorID.isin(visible_authors)]
     background_and_task_authors = pd.concat([task_authors_embeddings_df, background_authors_embeddings_df])
 
-    authors_texts = ['\n\n =========== \n\n'.join(x) if type(x) == list else x for x in background_and_task_authors[:max_num_authors]['fullText'].tolist()]
+    authors_texts = ['\n\n'.join(x) if type(x) == list else x for x in background_and_task_authors[:max_num_authors]['fullText'].tolist()]
     authors_names = background_and_task_authors[:max_num_authors]['authorID'].tolist()
     print(f"Number of authors to show: {len(authors_texts)}")
     print(f"Authors names: {authors_names}")
@@ -152,9 +170,13 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
 
     if selected_feature_llm and selected_feature_llm != "None":
         # print(llm_style_feats_analysis)
+        print(f"{len(llm_style_feats_analysis['spans'].values())}")
         author_list = list(llm_style_feats_analysis['spans'].values())
+        # print(f"Author list length: {len(author_list)}")
+        # print(f"Author list: {author_list}")
         llm_spans_list = []
         for i, (_, txt) in enumerate(texts):
+            print(f"{i}/{len(texts)}")
             author_spans_list = []
             for txt_span in author_list[i][selected_feature_llm]:
                     author_spans_list.append(Span(txt.find(txt_span), txt.find(txt_span) + len(txt_span)))
@@ -163,9 +185,13 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
         print("Skipping LLM span extraction: feature is None")
         llm_spans_list = [[] for _ in texts]
 
+    short = None
     if selected_feature_g2v and selected_feature_g2v != "None":
         # get gram2vec spans
         gram_spans_list = []
+        # In case any old label formatting with z-scores leaks through, strip it defensively
+        if "| [Z=" in selected_feature_g2v:
+            selected_feature_g2v = selected_feature_g2v.split(" | [Z=")[0].strip()
         print(f"Selected Gram2Vec feature: {selected_feature_g2v}")
         short = get_shorthand(selected_feature_g2v)
         print(f"short hand: {short}")
@@ -198,10 +224,23 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
     )
     combined_html = "<div>" + "\n<hr>\n".join(html_task_authors) + "</div>"
 
+    # print(f"\n\n\n\n{texts[4:]}")
+
+    # Filter background authors to those with at least one Gram2Vec span
+    bg_start = 4
+    bg_indices = list(range(bg_start, len(texts)))
+    kept_indices = [i for i in bg_indices if gram_spans_list[i]]
+    # print(f"\n---> {kept_indices}")
+    filtered_texts_bg = [texts[i] for i in kept_indices]
+    filtered_llm_bg   = [llm_spans_list[i] for i in kept_indices]
+    filtered_gram_bg  = [gram_spans_list[i] for i in kept_indices]
+
+    # print(filtered_texts_bg)
+
     html_background_authors = create_html(
-        texts[4:], #last three are background
-        llm_spans_list,
-        gram_spans_list,
+        filtered_texts_bg,
+        filtered_llm_bg,
+        filtered_gram_bg,
         selected_feature_llm,
         selected_feature_g2v,
         short, 
@@ -210,6 +249,7 @@ def show_combined_spans_all(selected_feature_llm, selected_feature_g2v,
         ground_truth_author=ground_truth_author
     )
     background_html = "<div>" + "\n<hr>\n".join(html_background_authors) + "</div>"
+    # print(f"Background HTML: {background_html}")
     return combined_html, background_html
 
 def get_label(label: str, predicted_author=None, ground_truth_author=None, bg_id: int=0) -> str:
@@ -221,7 +261,7 @@ def get_label(label: str, predicted_author=None, ground_truth_author=None, bg_id
         return "Mystery Author"
     elif label.startswith("a0_author") or label.startswith("a1_author") or label.startswith("a2_author") or label.startswith("Candidate"):
         if label.startswith("Candidate"):
-            id = int(label.split(" ")[2])  # Get the number after 'Candidate Author'
+            id = int(label.split(" ")[2])-1  # Get the number after 'Candidate Author'; convert to 0 index
         else:
             id = label.split("_")[0][-1] # Get the last character of the first part (a0, a1, a2)
         if predicted_author is not None and ground_truth_author is not None:
@@ -241,8 +281,57 @@ def get_label(label: str, predicted_author=None, ground_truth_author=None, bg_id
 def create_html(texts, llm_spans_list, gram_spans_list, selected_feature_llm, selected_feature_g2v, short=None, background = False, predicted_author=None, ground_truth_author=None):
     html = []
     for i, (label, txt) in enumerate(texts):
+        # print(i, label, txt[:30])
         label = get_label(label, predicted_author, ground_truth_author,  i) if background else get_label(label, predicted_author, ground_truth_author)
         combined = highlight_both_spans(txt, llm_spans_list[i], gram_spans_list[i])
+        
+        # Count spans for display
+        llm_span_count = len(llm_spans_list[i])
+        gram_span_count = len(gram_spans_list[i])
+        
+        # Build span count display
+        span_count_info = ""
+        if selected_feature_llm != "None" or selected_feature_g2v != "None":
+            span_count_info = """
+            <div style="
+                background: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 8px;
+                margin-bottom: 8px;
+                font-size: 0.95em;
+                display: flex;
+                gap: 1em;
+            ">
+            """
+            if selected_feature_llm != "None":
+                span_count_info += f"""
+                <div style="flex: 1;">
+                    <strong>LLM Feature Spans:</strong>
+                    <span style="
+                        background: #FFEB3B;
+                        padding: 2px 8px;
+                        border-radius: 3px;
+                        margin-left: 4px;
+                        font-weight: bold;
+                    ">{llm_span_count}</span>
+                </div>
+                """
+            if selected_feature_g2v != "None":
+                span_count_info += f"""
+                <div style="flex: 1;">
+                    <strong>G2V Feature Spans:</strong>
+                    <span style="
+                        background: #5CB3FF;
+                        padding: 2px 8px;
+                        border-radius: 3px;
+                        margin-left: 4px;
+                        font-weight: bold;
+                    ">{gram_span_count}</span>
+                </div>
+                """
+            span_count_info += "</div>"
+        
         notice = ""
         if selected_feature_llm == "None":
             notice += f"""
@@ -276,6 +365,7 @@ def create_html(texts, llm_spans_list, gram_spans_list, selected_feature_llm, se
             """
         html.append(f"""
           <h3>{label}</h3>
+          {span_count_info}
           {notice}
           <div style="border:1px solid #ccc; padding:8px; margin-bottom:1em;">
             {combined}

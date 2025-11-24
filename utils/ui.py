@@ -81,18 +81,17 @@ def read_txt(f):
 def toggle_task(mode):
     print(mode)
     return (
-        gr.update(visible=(mode == "Predefined HRS Task")),
+        gr.update(visible=(mode == "Predefined Reddit Task")),
         gr.update(visible=(mode == "Upload Your Own Task"))
     )
 
 # Update displayed texts based on mode
 def update_task_display(mode, iid, instances, background_df, mystery_file, cand1_file, cand2_file, cand3_file, true_author, model_radio, custom_model_input):
     model_name = model_radio if model_radio != "Other" else custom_model_input
-    if mode == "Predefined HRS Task":
+    if mode == "Predefined Reddit Task":
         iid = int(iid.replace('Task ', ''))
         data = instances[iid]
-        predicted_author = data['latent_rank'][0]
-        ground_truth_author = data['gt_idx']
+        ground_truth_author = 100#data['gt_idx']
         mystery_txt = data['Q_fullText']
         c1_txt = data['a0_fullText']
         c2_txt = data['a1_fullText']
@@ -100,9 +99,8 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
         candidate_texts = [c1_txt, c2_txt, c3_txt]
 
         #create a dataframe of the task authors
-        task_authors_df  = instance_to_df(instances[iid])
+        task_authors_df  = instance_to_df(instances[iid], predicted_author=None, ground_truth_author=ground_truth_author)
         print(f"\n\n\n ----> Loaded task {iid} with {len(task_authors_df)} authors\n\n\n")
-        print(task_authors_df)
     else:
         header_html = "<h3>Custom Uploaded Task</h3>"
         mystery_txt = read_txt(mystery_file)
@@ -118,16 +116,16 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
             'a1_fullText': c2_txt,
             'a2_fullText': c3_txt
         }
-        task_authors_df  = instance_to_df(custom_task_instance)
-        print(task_authors_df)
+        task_authors_df  = instance_to_df(custom_task_instance, predicted_author=None, ground_truth_author=true_author)
     
-    print(f"Generating embeddings for {model_name} on task authors")
-    task_authors_df = cached_generate_style_embedding(task_authors_df, 'fullText', model_name)
-    print("Task authors after embedding generation:")
-    print(task_authors_df)
+    #print(f"Generating embeddings for {model_name} on task authors")
+    # task_authors_df = cached_generate_style_embedding(task_authors_df, 'fullText', model_name)
+    # print("Task authors after embedding generation:")
+    # print(task_authors_df)
+    
     # Generate the new embedding of all the background_df authors
     print(f"Generating embeddings for {model_name} on background corpus")
-    background_df = cached_generate_style_embedding(background_df, 'fullText', model_name)
+    background_df, task_authors_df = cached_generate_style_embedding(background_df, 'fullText', model_name, task_authors_df=task_authors_df)
     print(f"Generated embeddings for {len(background_df)} texts using model '{model_name}'")
 
     # computing g2v features
@@ -136,8 +134,6 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
     background_df['g2v_vector'] = background_g2v
     task_authors_df['g2v_vector'] = task_authors_g2v
     print(f"Gram2Vec feature generation complete")
-
-    print(background_df.columns)
 
     # Computing predicted author by checking pairwise cosine similarity over luar embeddings
     col_name = f'{model_name.split("/")[-1]}_style_embedding'
@@ -163,6 +159,12 @@ def update_task_display(mode, iid, instances, background_df, mystery_file, cand1
     ]
 
 def task_HTML(mystery_text, candidate_texts, predicted_author, ground_truth_author):
+
+    # if any of the texts is a list of text then concatenate them
+    if isinstance(mystery_text, list):
+        mystery_text = "\n\n".join(mystery_text)
+        candidate_texts = ["\n\n".join(x) for x in candidate_texts]
+
     header_html = f"""
     <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
       <h3>Here’s the mystery passage alongside three candidate texts—look for the green highlight to see the predicted author.</h3>
