@@ -5,24 +5,38 @@
 
 </div>
 
-An interactive web application for explaining and visualizing authorship attribution models. This tool provides insights into the latent space of embedding-based authorship attribution (AA) models, helping researchers and analysts understand how these models make decisions about text authorship.
+An interactive web application for **explaining and visualizing authorship attribution models**, combining traditional linguistic signals with modern LLM-based stylistic features. This tool provides an intuitive interface for exploring the latent space of sentence-transformer AA models and understanding how these models make attribution decisions.
 
-## About
+## 🎯 System Overview
 
-This demo application helps you **explore** the latent space of any sentence transformer authorship attribution model. It provides:
+This demo visualizes how authorship attribution systems interpret writing style.
+Given a mystery document and a set of candidate authors, the tool:
 
-- **Interactive visualizations** of author embeddings and feature importance
-- **Explanatory analysis** using both traditional linguistic features (Gram2Vec) and modern LLM-based features
+1. Embeds all documents into a shared representation space
+2. Displays their neighborhoods using dimensionality reduction
+3. Highlights linguistic and LLM-based stylistic features associated with each author
+4. Provides interactive explanations through zooming, comparison, and text-level feature attributions
 
-The tool is designed for researchers, forensic linguists, and anyone interested in understanding how computational models analyze writing style and attribute authorship.
+The demo is designed for researchers, forensic linguists, and practitioners studying author style, attribution behavior, or model interpretability.
 
-## Features
+## 💡 Key Contributions
 
-- 📊 **Interactive Gradio Interface**: User-friendly web interface for exploring authorship attribution
-- 🔍 **Multi-Feature Analysis**: Compares Gram2Vec features with LLM-based stylistic analysis  
-- 📈 **Visualization Tools**: t-SNE plots, embedding visualizations, and feature highlights in text
-- 🤖 **OpenAI Integration**: Uses language models for advanced feature extraction and explanation
-- 💾 **Caching System**: Pre-computed embeddings and features for faster analysis
+This demo introduces several features not found in existing AA explainability tools:
+
+1. **Shows two distinct types of features**:
+    - LLM-extracted stylistic features (semantic, discourse, and rhetorical cues)
+    - [Gram2Vec linguistic features](https://github.com/eric-sclafani/gram2vec) (n-grams, POS-grams, stylistic markers)
+
+2. **Zoom-Based Latent Space Exploration**: 
+Users can zoom into regions of the embedding space to:
+    - inspect clusters of stylistically similar authors
+    - filter explanations to only the authors visible in the zoomed region
+    - analyze how neighborhood shifts influence attribution
+
+3. **Span-Level Text Highlighting** Highlights segments of the mystery and candidate documents that strongly influence attribution.
+
+4. **Model-Agnostic Design**
+Compatible with any sentence-transformer model, enabling flexibility for AA research and forensic applications.
 
 ## Installation
 
